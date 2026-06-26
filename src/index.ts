@@ -52,3 +52,19 @@ export {
   expectedColumns,
   type LiveColumn,
 } from "./check";
+
+// Safe-by-construction primitives for user-defined / multi-tenant schemas.
+export {
+  ALLOWED_SCALAR_TYPES,
+  type AllowedScalarType,
+  assertColumnCount,
+  assertNotReserved,
+  columnFromTypeSpec,
+  type ColumnTypeSpec,
+  DEFAULT_LIMITS,
+  DEFAULT_RESERVED_COLUMNS,
+  quoteIdentifier,
+  type SchemaLimits,
+  SchemaSafetyError,
+  validateIdentifier,
+} from "./safety";

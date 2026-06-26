@@ -6,7 +6,7 @@
 
 ## v0.2 — the safe foundation for flexible, user-driven, multi-tenant schemas
 
-**Reframe:** compile-time (developer) and runtime (end-user/customer) schemas look opposed but need the *same primitives* — a bounded type system, DDL generation, identifier safety, row validation, additive evolution. v0.1 has the first two for the static case. v0.2 exposes those primitives through a **runtime-constructable path alongside** the static literal one, without losing static type inference.
+**Reframe:** compile-time (developer) and runtime (end-user/customer) schemas look opposed but need the _same primitives_ — a bounded type system, DDL generation, identifier safety, row validation, additive evolution. v0.1 has the first two for the static case. v0.2 exposes those primitives through a **runtime-constructable path alongside** the static literal one, without losing static type inference.
 
 **Positioning:** the kit becomes the toolkit for building flexible, multi-tenant, user-defined ClickHouse schemas **safely by construction** — not a static DDL helper. Apps stop hand-rolling allowed-type allowlists, identifier sanitization, flatten-to-Map catch-alls, schemaless DDL, and ad-hoc `ALTER ADD COLUMN`; those are general ClickHouse-multitenancy concerns and belong here.
 
