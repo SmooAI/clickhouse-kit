@@ -10,9 +10,21 @@
 //! turned into SQL — safe-by-construction only counts in the process holding the
 //! input. See the repo `ROADMAP.md`.
 
+pub mod client;
+pub mod drift;
+pub mod evolve;
+pub mod flatten;
+pub mod flexible;
+pub mod migrate;
 pub mod safety;
 pub mod table;
 
+pub use client::{ChError, ChExecutor};
+pub use drift::{check_drift, Drift, DriftResult};
+pub use evolve::{alter_add_columns_sql, diff_columns, ColumnDiff, LiveColumn};
+pub use flatten::{coerce_to_table, flatten_record, CoerceResult, FlattenOptions};
+pub use flexible::{flexible_table, FlexibleConfig};
+pub use migrate::{run_migrations, split_sql_statements, MigrationRunResult};
 pub use safety::{
     assert_column_count, assert_not_reserved, quote_identifier, validate_identifier,
     ColumnTypeSpec, ScalarType, SchemaError, SchemaLimits, StringOnly, DEFAULT_RESERVED_COLUMNS,
