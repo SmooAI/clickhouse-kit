@@ -10,6 +10,8 @@
 
 **Positioning:** the kit becomes the toolkit for building flexible, multi-tenant, user-defined ClickHouse schemas **safely by construction** — not a static DDL helper. Apps stop hand-rolling allowed-type allowlists, identifier sanitization, flatten-to-Map catch-alls, schemaless DDL, and ad-hoc `ALTER ADD COLUMN`; those are general ClickHouse-multitenancy concerns and belong here.
 
+**Status:** items 1–5 shipped in **0.2.0**; item 6 is partially shipped (`ch.json()` is available; the explicit ≥24.8 version-gating docs are still to come).
+
 ### Capabilities (all additive; preserve the kit's character)
 
 1. **Runtime table construction** — `clickhouseTableFromSpec(name, columnSpec[], options)`: accepts a runtime-built column list (from a customer config / DB row / JSON), returns a generic `ChTable` with the same `toCreateTableSql` + a runtime zod validator. Static `clickhouseTable` stays for typed dev tables; share the rendering underneath.
