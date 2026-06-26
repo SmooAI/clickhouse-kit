@@ -11,8 +11,10 @@
 //! input. See the repo `ROADMAP.md`.
 
 pub mod safety;
+pub mod table;
 
 pub use safety::{
     assert_column_count, assert_not_reserved, quote_identifier, validate_identifier,
     ColumnTypeSpec, ScalarType, SchemaError, SchemaLimits, StringOnly, DEFAULT_RESERVED_COLUMNS,
 };
+pub use table::{to_create_table_sql, ColumnSpec, TableSpec};

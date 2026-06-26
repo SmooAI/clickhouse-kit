@@ -24,5 +24,7 @@ jobs:
         run: cargo fmt --check
       - name: Clippy
         run: cargo clippy --all-targets -- -D warnings
-      - name: Test
+      - name: Test (unit)
         run: cargo test
+      - name: Test (integration — real ClickHouse via testcontainers)
+        run: cargo test --test integration -- --ignored

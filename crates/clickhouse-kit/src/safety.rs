@@ -28,6 +28,8 @@ pub enum SchemaError {
     TooManyColumns { count: usize, max: usize },
     #[error("column name {0:?} is reserved")]
     ReservedColumn(String),
+    #[error("duplicate column name {0:?}")]
+    DuplicateColumn(String),
 }
 
 /// Size bounds for a schema.
