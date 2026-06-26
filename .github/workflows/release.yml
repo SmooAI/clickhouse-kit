@@ -17,6 +17,12 @@ jobs:
       contents: write
       pull-requests: write
       id-token: write
+    # Publish to npm only when an NPM_TOKEN secret is configured; otherwise run in
+    # version-only mode (open the "Version Packages" PR when changesets exist).
+    # This keeps the workflow green before npm publishing is set up, and starts
+    # publishing automatically once the token is added — no further edits needed.
+    env:
+      HAS_NPM_TOKEN: ${{ secrets.NPM_TOKEN != '' }}
     steps:
       - name: Checkout code repository
         uses: actions/checkout@v4
@@ -46,13 +52,14 @@ jobs:
       - name: Build
         run: pnpm build
 
-      - name: Version & Publish 🦋
+      - name: Changesets — version (+ publish when NPM_TOKEN present) 🦋
         uses: changesets/action@v1
         with:
+          version: pnpm changeset version
+          publish: ${{ env.HAS_NPM_TOKEN == 'true' && 'pnpm ci:publish' || '' }}
           commit: "🦋 New version release"
           title: "🦋 New version release"
-          publish: pnpm ci:publish
-          createGithubReleases: true
+          createGithubReleases: ${{ env.HAS_NPM_TOKEN == 'true' }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
