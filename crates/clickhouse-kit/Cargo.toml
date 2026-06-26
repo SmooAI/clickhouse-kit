@@ -1,0 +1,16 @@
+[package]
+name = "clickhouse-kit"
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+description = "Safe-by-construction schema toolkit for ClickHouse — schema-as-code, an allowlisted type system for user-defined/multi-tenant schemas, DDL generation, and additive evolution. Rust-canonical port of @smooai/clickhouse-kit."
+repository = "https://github.com/SmooAI/clickhouse-kit"
+keywords = ["clickhouse", "schema", "migrations", "olap", "multi-tenant"]
+categories = ["database"]
+
+[dependencies]
+serde = { version = "1", features = ["derive"] }
+thiserror = "2"
+
+[dev-dependencies]
+serde_json = "1"
