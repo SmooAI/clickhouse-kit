@@ -22,7 +22,7 @@ jobs:
     # This keeps the workflow green before npm publishing is set up, and starts
     # publishing automatically once the token is added — no further edits needed.
     env:
-      HAS_NPM_TOKEN: ${{ secrets.NPM_TOKEN != '' }}
+      HAS_NPM_TOKEN: ${{ secrets.SMOOAI_NPM_TOKEN != '' }}
     steps:
       - name: Checkout code repository
         uses: actions/checkout@v4
@@ -62,5 +62,5 @@ jobs:
           createGithubReleases: ${{ env.HAS_NPM_TOKEN == 'true' }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+          NPM_TOKEN: ${{ secrets.SMOOAI_NPM_TOKEN }}
+          NODE_AUTH_TOKEN: ${{ secrets.SMOOAI_NPM_TOKEN }}
