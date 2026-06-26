@@ -3,10 +3,10 @@ name: Rust
 on:
   pull_request:
     branches: [main]
-    paths: ['crates/**', '.github/workflows/rust.yml']
+    paths: ["crates/**", ".github/workflows/rust.yml"]
   push:
     branches: [main]
-    paths: ['crates/**']
+    paths: ["crates/**"]
 
 defaults:
   run:
