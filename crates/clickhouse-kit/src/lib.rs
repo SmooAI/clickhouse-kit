@@ -27,6 +27,7 @@ pub use flexible::{flexible_table, FlexibleConfig};
 pub use migrate::{run_migrations, split_sql_statements, MigrationRunResult};
 pub use safety::{
     assert_column_count, assert_not_reserved, quote_identifier, validate_identifier,
-    ColumnTypeSpec, ScalarType, SchemaError, SchemaLimits, StringOnly, DEFAULT_RESERVED_COLUMNS,
+    ColumnTypeSpec, DateTime64Spec, ScalarType, SchemaError, SchemaLimits, StringOnly,
+    DEFAULT_RESERVED_COLUMNS,
 };
-pub use table::{to_create_table_sql, ColumnSpec, TableSpec};
+pub use table::{to_create_table_sql, ColumnSpec, IndexSpec, TableSpec, TtlMove, TtlSpec};

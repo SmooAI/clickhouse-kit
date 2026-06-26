@@ -30,6 +30,8 @@ pub enum SchemaError {
     ReservedColumn(String),
     #[error("duplicate column name {0:?}")]
     DuplicateColumn(String),
+    #[error("invalid DateTime64 precision: {precision} (must be 0..=9)")]
+    InvalidDateTime64Precision { precision: u8 },
 }
 
 /// Size bounds for a schema.
@@ -58,6 +60,18 @@ fn is_valid_identifier(name: &str) -> bool {
         _ => return false,
     }
     chars.all(|c| c.is_ascii_alphanumeric() || c == '_')
+}
+
+/// Whether `tz` is a plausible IANA timezone name: 1..=64 chars from the
+/// `[A-Za-z0-9_+/-]` charset (covers names like `UTC`, `America/New_York`,
+/// `Etc/GMT+5`). Anything outside this charset (quotes, semicolons, spaces) is
+/// rejected, so an untrusted timezone string cannot inject SQL.
+fn is_valid_timezone(tz: &str) -> bool {
+    !tz.is_empty()
+        && tz.len() <= 64
+        && tz
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || matches!(c, '_' | '+' | '/' | '-'))
 }
 
 /// Validate a table/column identifier against the strict ASCII allowlist + length
@@ -171,6 +185,46 @@ pub enum StringOnly {
     String,
 }
 
+fn default_dt64_precision() -> u8 {
+    3
+}
+
+/// A parametrised `DateTime64(precision[, 'timezone'])` column type.
+///
+/// **Safety posture:** `precision` and `timezone` may come from untrusted JSON, so
+/// they are **validated before rendering** (via [`DateTime64Spec::validate`], called
+/// from the table builder's per-column loop): `precision` must be `0..=9` and
+/// `timezone` must match the IANA charset `^[A-Za-z0-9_+/-]{1,64}$`. The default
+/// (bare `{"datetime64":{}}`) is `DateTime64(3)`, matching the legacy
+/// [`ScalarType::DateTime64`] rendering.
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+pub struct DateTime64Spec {
+    #[serde(default = "default_dt64_precision")]
+    pub precision: u8,
+    #[serde(default)]
+    pub timezone: Option<String>,
+}
+
+impl DateTime64Spec {
+    /// Validate the (possibly untrusted) precision + timezone before they reach SQL.
+    pub fn validate(&self) -> Result<(), SchemaError> {
+        if self.precision > 9 {
+            return Err(SchemaError::InvalidDateTime64Precision {
+                precision: self.precision,
+            });
+        }
+        if let Some(tz) = &self.timezone {
+            if !is_valid_timezone(tz) {
+                return Err(SchemaError::InvalidIdentifier {
+                    kind: "timezone",
+                    name: tz.clone(),
+                });
+            }
+        }
+        Ok(())
+    }
+}
+
 /// A column type as supplied by untrusted input — the allowlisted recursive shape.
 /// Mirrors the TS `ColumnTypeSpec`: a bare scalar string, or a single-key wrapper
 /// object (`nullable` / `lowCardinality` / `array` / `map`).
@@ -178,6 +232,12 @@ pub enum StringOnly {
 #[serde(untagged)]
 pub enum ColumnTypeSpec {
     Scalar(ScalarType),
+    /// Parametrised `DateTime64(precision[, 'timezone'])`. JSON:
+    /// `{"datetime64": {"precision": 3, "timezone": "UTC"}}`. The single `datetime64`
+    /// key keeps the untagged match unambiguous against the other wrappers.
+    DateTime64 {
+        datetime64: DateTime64Spec,
+    },
     Nullable {
         nullable: Box<ColumnTypeSpec>,
     },
@@ -195,9 +255,17 @@ pub enum ColumnTypeSpec {
 
 impl ColumnTypeSpec {
     /// The ClickHouse type string for this spec.
+    ///
+    /// For [`ColumnTypeSpec::DateTime64`] this trusts the spec to be valid; untrusted
+    /// precision/timezone must be checked first via [`ColumnTypeSpec::validate`] (the
+    /// table builder does this in its per-column loop).
     pub fn to_ch_type(&self) -> String {
         match self {
             ColumnTypeSpec::Scalar(s) => s.ch_type().to_string(),
+            ColumnTypeSpec::DateTime64 { datetime64 } => match &datetime64.timezone {
+                Some(tz) => format!("DateTime64({}, '{}')", datetime64.precision, tz),
+                None => format!("DateTime64({})", datetime64.precision),
+            },
             ColumnTypeSpec::Nullable { nullable } => format!("Nullable({})", nullable.to_ch_type()),
             ColumnTypeSpec::LowCardinality { low_cardinality } => {
                 format!("LowCardinality({})", low_cardinality.to_ch_type())
@@ -208,13 +276,29 @@ impl ColumnTypeSpec {
     }
 
     /// Whether a `DateTime64` is at the core (so a TTL move expression must wrap it
-    /// in `toDateTime(...)`). Propagates through `Nullable`/`LowCardinality`.
+    /// in `toDateTime(...)`). Propagates through `Nullable`/`LowCardinality` and covers
+    /// both the bare [`ScalarType::DateTime64`] and the parametrised
+    /// [`ColumnTypeSpec::DateTime64`] variant.
     pub fn is_datetime64(&self) -> bool {
         match self {
             ColumnTypeSpec::Scalar(ScalarType::DateTime64) => true,
+            ColumnTypeSpec::DateTime64 { .. } => true,
             ColumnTypeSpec::Nullable { nullable } => nullable.is_datetime64(),
             ColumnTypeSpec::LowCardinality { low_cardinality } => low_cardinality.is_datetime64(),
             _ => false,
+        }
+    }
+
+    /// Validate any embedded untrusted parameters (currently the parametrised
+    /// `DateTime64` precision + timezone) before this type is rendered to SQL.
+    /// Recurses through `Nullable`/`LowCardinality`. Identifier-shaped scalars/arrays/
+    /// maps have nothing to validate here.
+    pub fn validate(&self) -> Result<(), SchemaError> {
+        match self {
+            ColumnTypeSpec::DateTime64 { datetime64 } => datetime64.validate(),
+            ColumnTypeSpec::Nullable { nullable } => nullable.validate(),
+            ColumnTypeSpec::LowCardinality { low_cardinality } => low_cardinality.validate(),
+            _ => Ok(()),
         }
     }
 }
@@ -326,5 +410,78 @@ mod tests {
                 "should reject {b}"
             );
         }
+    }
+
+    #[test]
+    fn parametrised_datetime64_renders_and_validates() {
+        // Full precision + timezone.
+        let utc: ColumnTypeSpec =
+            serde_json::from_str(r#"{"datetime64":{"precision":3,"timezone":"UTC"}}"#).unwrap();
+        assert_eq!(utc.to_ch_type(), "DateTime64(3, 'UTC')");
+        assert!(utc.is_datetime64());
+        assert!(utc.validate().is_ok());
+
+        // Precision only, no timezone.
+        let p6: ColumnTypeSpec = serde_json::from_str(r#"{"datetime64":{"precision":6}}"#).unwrap();
+        assert_eq!(p6.to_ch_type(), "DateTime64(6)");
+        assert!(p6.validate().is_ok());
+
+        // Empty object → defaults to DateTime64(3), matching the legacy scalar.
+        let def: ColumnTypeSpec = serde_json::from_str(r#"{"datetime64":{}}"#).unwrap();
+        assert_eq!(def.to_ch_type(), "DateTime64(3)");
+        assert!(def.is_datetime64());
+        assert!(def.validate().is_ok());
+
+        // The bare string still deserializes to the legacy scalar variant.
+        let bare: ColumnTypeSpec = serde_json::from_str("\"DateTime64\"").unwrap();
+        assert!(matches!(
+            bare,
+            ColumnTypeSpec::Scalar(ScalarType::DateTime64)
+        ));
+
+        // A real IANA name with a slash + plus is accepted.
+        let tz: ColumnTypeSpec =
+            serde_json::from_str(r#"{"datetime64":{"precision":9,"timezone":"America/New_York"}}"#)
+                .unwrap();
+        assert_eq!(tz.to_ch_type(), "DateTime64(9, 'America/New_York')");
+        assert!(tz.validate().is_ok());
+    }
+
+    #[test]
+    fn parametrised_datetime64_rejects_bad_params() {
+        // Injection attempt in the timezone string.
+        let bad_tz: ColumnTypeSpec =
+            serde_json::from_str(r#"{"datetime64":{"precision":3,"timezone":"UTC'; DROP"}}"#)
+                .unwrap();
+        assert!(matches!(
+            bad_tz.validate(),
+            Err(SchemaError::InvalidIdentifier {
+                kind: "timezone",
+                ..
+            })
+        ));
+
+        // Out-of-range precision.
+        let bad_p: ColumnTypeSpec =
+            serde_json::from_str(r#"{"datetime64":{"precision":12}}"#).unwrap();
+        assert!(matches!(
+            bad_p.validate(),
+            Err(SchemaError::InvalidDateTime64Precision { precision: 12 })
+        ));
+    }
+
+    #[test]
+    fn parametrised_datetime64_is_datetime64_through_nullable() {
+        let n: ColumnTypeSpec =
+            serde_json::from_str(r#"{"nullable":{"datetime64":{"precision":3,"timezone":"UTC"}}}"#)
+                .unwrap();
+        assert!(n.is_datetime64());
+        assert_eq!(n.to_ch_type(), "Nullable(DateTime64(3, 'UTC'))");
+        assert!(n.validate().is_ok());
+
+        // Validation propagates through the wrapper too.
+        let bad: ColumnTypeSpec =
+            serde_json::from_str(r#"{"nullable":{"datetime64":{"precision":12}}}"#).unwrap();
+        assert!(bad.validate().is_err());
     }
 }

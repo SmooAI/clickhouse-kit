@@ -185,6 +185,10 @@ mod tests {
             ],
             engine: "MergeTree()".into(),
             order_by: vec!["id".into()],
+            partition_by: None,
+            ttl: None,
+            indexes: vec![],
+            settings: vec![],
         }
     }
 
@@ -300,6 +304,10 @@ mod tests {
             columns: vec![col("id", ColumnTypeSpec::Scalar(ScalarType::String))],
             engine: "MergeTree()".into(),
             order_by: vec!["id".into()],
+            partition_by: None,
+            ttl: None,
+            indexes: vec![],
+            settings: vec![],
         };
         let input = json!({ "id": "abc", "extra": "x" });
         let res = coerce_to_table(input, &table, &FlattenOptions::default());
