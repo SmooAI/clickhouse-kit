@@ -105,7 +105,7 @@ let table = TableSpec {
 
 A `DateTime64` TTL column is automatically wrapped in `toDateTime(...)`. All four fields are optional/empty by default, so existing specs render exactly as before.
 
-**Safety posture:** these knobs are **app-controlled raw fragments** emitted verbatim — `partition_by`, the index `expression`/`type_def`, the TTL `interval`/`volume`/`delete_after`, and the settings RHS values are *not* validated, exactly like `engine`. Only identifiers are validated: the index `name`, and the TTL `column` (which must also be a real column in the table). Never build the raw fragments from untrusted input.
+**Safety posture:** these knobs are **app-controlled raw fragments** emitted verbatim — `partition_by`, the index `expression`/`type_def`, the TTL `interval`/`volume`/`delete_after`, and the settings RHS values are _not_ validated, exactly like `engine`. Only identifiers are validated: the index `name`, and the TTL `column` (which must also be a real column in the table). Never build the raw fragments from untrusted input.
 
 ## Ingest: flatten + coerce
 
