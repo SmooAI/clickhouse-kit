@@ -1,12 +1,22 @@
 [package]
-name = "clickhouse-kit"
+name = "smooai-clickhouse-kit"
 version = "0.1.0"
 edition = "2021"
+rust-version = "1.75"
 license = "MIT"
-description = "Safe-by-construction schema toolkit for ClickHouse — schema-as-code, an allowlisted type system for user-defined/multi-tenant schemas, DDL generation, and additive evolution. Rust-canonical port of @smooai/clickhouse-kit."
+description = "Safe-by-construction ClickHouse schema toolkit: an allowlisted type system for user-defined / multi-tenant schemas, DDL generation, forward-only migrations, and drift detection. Rows stay Serde-native."
+documentation = "https://docs.rs/smooai-clickhouse-kit"
 repository = "https://github.com/SmooAI/clickhouse-kit"
-keywords = ["clickhouse", "schema", "migrations", "olap", "multi-tenant"]
-categories = ["database"]
+homepage = "https://github.com/SmooAI/clickhouse-kit"
+readme = "README.md"
+keywords = ["clickhouse", "schema", "migrations", "multi-tenant", "olap"]
+categories = ["database", "data-structures"]
+
+# The package is `smooai-clickhouse-kit` (we're always smooai-scoped), but the
+# library imports as `clickhouse_kit` for ergonomics: `use clickhouse_kit::...`.
+[lib]
+name = "clickhouse_kit"
+path = "src/lib.rs"
 
 [dependencies]
 serde = { version = "1", features = ["derive"] }
