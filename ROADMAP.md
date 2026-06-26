@@ -25,5 +25,16 @@
 
 - **Minimal + additive.** No ORM, no query builder, no auto-diff engine for static tables (the additive ALTER is a separate, explicitly-bounded path).
 - **Forward-only** migrations remain the model for code-defined tables.
-- **TS-only, no Rust, MIT, generic.** Frame every primitive as "multi-tenant ClickHouse," never coupled to one app.
+- **MIT, generic.** Frame every primitive as "multi-tenant ClickHouse," never coupled to one app.
 - **Safe by construction.** Every runtime/user-facing primitive validates input; the happy path makes SQL injection and unbounded tables impossible, not merely discouraged.
+
+## Next: Rust-canonical (the customer-shape work runs in Rust)
+
+The flexible / multi-tenant surface (runtime construction, the safety layer, flatten/coerce, additive evolution) is consumed by **Rust** services (api-prime, audit-logs, the Ask-Your-Data data platform) — that's where untrusted customer schema input is turned into SQL, and _safe-by-construction only counts in the process holding the input_. So the canonical implementation moves to Rust:
+
+- **Canonical Rust crate** (`crates/clickhouse-kit`, crates.io, MIT) — rows are Serde-native (`#[derive(Row)]` via the `clickhouse` crate); the crate adds the allowlisted type system, identifier safety, DDL generation, runtime/`flexible` construction, additive evolution, migrations, and drift. The allowlist is _stronger_ than the TS version: disallowed types are **unrepresentable** (no enum variant), so untrusted JSON naming them fails to deserialize at the boundary.
+- **npm package → a thin WASM binding** around the same Rust core for the remaining TS consumers (the pure logic — DDL gen, safety, flatten — is WASM-able; the migration runner + drift keep per-language I/O edges). One implementation, two distributions — which removes the TS↔Rust parity burden.
+- **The TS v0.1/v0.2 is the reference spec** the Rust port mirrors (the adversarial safety tests translate almost line-for-line).
+- **Tradeoff recorded:** TS compile-time `$inferSelect` row inference can't come from a WASM/runtime core — static TS-authored tables move to codegen'd types. Non-issue for dynamic tables (shapes unknown at compile time).
+
+Started: the Rust **safety core** (`crates/clickhouse-kit/src/safety.rs`) — `validate_identifier`/`quote_identifier`, the `ColumnTypeSpec` allowlist (+ `to_ch_type`/`is_datetime64`), bounds + reserved — plus runtime **table DDL generation** (`table.rs`: `to_create_table_sql` from an untrusted spec, with identifier/allowlist/bounds/dup guards). Verified **end-to-end against a real ClickHouse** via testcontainers (generate DDL → apply → introspect `system.columns` → insert/select round-trip); the ported adversarial unit suite (injection, disallowed types, bounds, dup columns) is green too. CI runs unit + the testcontainers integration.
