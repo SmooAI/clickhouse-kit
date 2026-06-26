@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
 import {
+  ch,
+  clickhouseTable,
   createInsertSchema,
   createSelectSchema,
   toCreateMaterializedViewSql,
@@ -48,6 +50,20 @@ describe("clickhouseTable → DDL", () => {
         options: { ...events.options, ttl: { column: "nope", deleteAfter: "1 DAY" } },
       }),
     ).toThrow(/unknown column/);
+  });
+});
+
+describe("Nullable / JSON columns", () => {
+  it("renders Nullable, LowCardinality(Nullable(...)) and JSON", () => {
+    const t = clickhouseTable(
+      "t",
+      { a: ch.nullable(ch.string()), b: ch.lowCardinality(ch.nullable(ch.string())), j: ch.json() },
+      { engine: "MergeTree()", orderBy: ["a"] },
+    );
+    const ddl = toCreateTableSql(t);
+    expect(ddl).toContain("a Nullable(String)");
+    expect(ddl).toContain("b LowCardinality(Nullable(String))");
+    expect(ddl).toContain("j JSON");
   });
 });
 

@@ -45,8 +45,21 @@ export const ch = {
   /** LowCardinality wrapper around an inner column type (keeps the inner's Zod). */
   lowCardinality: <T>(inner: ChColumn<T>) =>
     new ChColumn<T>(`LowCardinality(${inner.chType})`, inner.zodType, inner.isDateTime64),
+  /**
+   * Nullable wrapper around an inner column type — `Nullable(<inner>)`, with a
+   * nullable Zod. Composes with lowCardinality for the common
+   * `LowCardinality(Nullable(String))`: `ch.lowCardinality(ch.nullable(ch.string()))`.
+   */
+  nullable: <T>(inner: ChColumn<T>) =>
+    new ChColumn<T | null>(
+      `Nullable(${inner.chType})`,
+      inner.zodType.nullable(),
+      inner.isDateTime64,
+    ),
   mapStringString: () =>
     new ChColumn<Record<string, string>>("Map(String, String)", z.record(z.string(), z.string())),
+  /** A JSON column (the native ClickHouse `JSON` type) — read as an object. */
+  json: () => new ChColumn<Record<string, unknown>>("JSON", z.record(z.string(), z.unknown())),
   /**
    * An AggregateFunction state column (AggregatingMergeTree material), e.g.
    * `ch.aggregateFunction('quantilesTDigest(0.5, 0.95, 0.99), Float64')` →
