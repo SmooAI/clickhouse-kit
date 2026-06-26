@@ -68,3 +68,16 @@ export {
   SchemaSafetyError,
   validateIdentifier,
 } from "./safety";
+
+// Runtime (user-defined) table construction.
+export { clickhouseTableFromSpec, type ColumnSpec, runtimeSelectSchema } from "./runtime";
+
+// Semi-structured / catch-all hybrid table.
+export { flexibleTable, type FlexibleTableConfig } from "./flexible";
+
+// Flatten + coerce arbitrary input to a (possibly dynamic) table's columns.
+export { type CoerceResult, coerceToTable, type FlattenOptions, flattenRecord } from "./flatten";
+
+// Additive, bounded schema evolution (guarded ALTER ADD COLUMN).
+// (evolve.ts's LiveColumn mirrors ./check's — re-use that one to avoid a duplicate export.)
+export { alterAddColumnsSql, type ColumnDiff, diffColumns } from "./evolve";

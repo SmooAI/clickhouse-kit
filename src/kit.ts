@@ -58,6 +58,16 @@ export const ch = {
     ),
   mapStringString: () =>
     new ChColumn<Record<string, string>>("Map(String, String)", z.record(z.string(), z.string())),
+  /**
+   * `Map(String, String)` — the works-everywhere catch-all map (same shape as
+   * `mapStringString`, named `map` for ergonomics). The backbone of the flexible
+   * hybrid table's `attrs` column.
+   */
+  map: () =>
+    new ChColumn<Record<string, string>>("Map(String, String)", z.record(z.string(), z.string())),
+  /** `Array(<inner>)` — an array of the inner column's type, with an array Zod. */
+  array: <T>(inner: ChColumn<T>) =>
+    new ChColumn<T[]>(`Array(${inner.chType})`, z.array(inner.zodType)),
   /** A JSON column (the native ClickHouse `JSON` type) — read as an object. */
   json: () => new ChColumn<Record<string, unknown>>("JSON", z.record(z.string(), z.unknown())),
   /**
