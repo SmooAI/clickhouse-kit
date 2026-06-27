@@ -11,6 +11,8 @@
 //! input. See the repo `ROADMAP.md`.
 
 pub mod client;
+#[cfg(feature = "codegen")]
+pub mod codegen;
 pub mod drift;
 pub mod evolve;
 pub mod flatten;
