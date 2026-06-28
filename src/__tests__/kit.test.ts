@@ -76,7 +76,7 @@ describe("materialized view → DDL", () => {
   });
 });
 
-describe("drizzle-zod ergonomics", () => {
+describe("Zod schema emitters", () => {
   it("createSelectSchema parses a row and rejects a wrong type", () => {
     expect(selectEventSchema.safeParse(validEventRow).success).toBe(true);
     expect(selectEventSchema.safeParse({ ...validEventRow, value: "nope" }).success).toBe(false);

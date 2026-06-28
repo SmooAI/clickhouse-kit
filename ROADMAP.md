@@ -2,7 +2,7 @@
 
 ## v0.1 (shipped) — static, developer-authored schemas
 
-"Drizzle for ClickHouse": a developer authors a table once, at compile time, as a literal — `clickhouseTable(name, columns, options)` → `toCreateTableSql` (DDL) + inferred row type (`InferSelect`) + `createSelectSchema`/`createInsertSchema` (drizzle-zod) + forward-only migrations (`generate`/`migrate`/`check`, no auto-diff). Column system: `ch.*` (`ChColumn`). Minimal, TS-only, forward-only, MIT.
+A schema-as-code toolkit for ClickHouse: a developer authors a table once, at compile time, as a literal — `clickhouseTable(name, columns, options)` → `toCreateTableSql` (DDL) + inferred row type (`InferSelect`) + `createSelectSchema`/`createInsertSchema` (Zod schema emitters) + forward-only migrations (`generate`/`migrate`/`check`, no auto-diff). Column system: `ch.*` (`ChColumn`). Minimal, TS-only, forward-only, MIT.
 
 ## v0.2 — the safe foundation for flexible, user-driven, multi-tenant schemas
 
