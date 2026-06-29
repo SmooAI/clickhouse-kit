@@ -1,11 +1,10 @@
 {
   "name": "@smooai/clickhouse-kit",
   "version": "0.2.0",
-  "description": "Drizzle-shaped, TS-only schema toolkit for ClickHouse — schema-as-code, drizzle-zod-style schemas, forward-only migrations, and drift detection.",
+  "description": "TS-only schema-as-code toolkit for ClickHouse — declarative schemas, Zod schema emitters, forward-only migrations, and drift detection.",
   "keywords": [
     "clickhouse",
     "ddl",
-    "drizzle",
     "migrations",
     "olap",
     "schema",

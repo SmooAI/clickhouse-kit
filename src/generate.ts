@@ -5,7 +5,7 @@
 // `CREATE` DDL for any object not yet captured. There is NO auto-diff engine:
 // this only ever appends a brand-new CREATE for a not-yet-migrated table/MV.
 // Schema *changes* to an already-migrated object are hand-authored as a fresh
-// migration, exactly like Drizzle custom migrations.
+// migration, as custom SQL.
 
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";

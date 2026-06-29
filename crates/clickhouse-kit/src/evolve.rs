@@ -87,6 +87,10 @@ mod tests {
             ],
             engine: "MergeTree()".into(),
             order_by: vec!["id".into()],
+            partition_by: None,
+            ttl: None,
+            indexes: vec![],
+            settings: vec![],
         }
     }
 

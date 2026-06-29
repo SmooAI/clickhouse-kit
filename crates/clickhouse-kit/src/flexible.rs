@@ -12,7 +12,7 @@ use crate::safety::{
     assert_not_reserved, validate_identifier, ColumnTypeSpec, ScalarType, SchemaError,
     SchemaLimits, StringOnly, DEFAULT_RESERVED_COLUMNS,
 };
-use crate::table::{ColumnSpec, TableSpec};
+use crate::table::{ColumnSpec, IndexSpec, TableSpec, TtlSpec};
 
 /// Configuration for a flexible/hybrid table.
 ///
@@ -26,6 +26,15 @@ pub struct FlexibleConfig {
     pub engine: String,
     pub order_by: Vec<String>,
     pub reserved: Option<Vec<String>>,
+    /// App-controlled raw `PARTITION BY` expression — copied verbatim into the
+    /// produced [`TableSpec`]. See [`TableSpec`] for the safety posture.
+    pub partition_by: Option<String>,
+    /// Optional table TTL policy — copied verbatim into the produced [`TableSpec`].
+    pub ttl: Option<TtlSpec>,
+    /// Secondary data-skipping indexes — copied verbatim into the produced [`TableSpec`].
+    pub indexes: Vec<IndexSpec>,
+    /// App-controlled `SETTINGS` pairs — copied verbatim into the produced [`TableSpec`].
+    pub settings: Vec<(String, String)>,
 }
 
 /// Build a [`TableSpec`] for the flexible/hybrid table shape: the mandatory + promoted
@@ -74,6 +83,10 @@ pub fn flexible_table(
         columns,
         engine: config.engine,
         order_by: config.order_by,
+        partition_by: config.partition_by,
+        ttl: config.ttl,
+        indexes: config.indexes,
+        settings: config.settings,
     })
 }
 
@@ -100,6 +113,10 @@ mod tests {
             engine: "MergeTree()".into(),
             order_by: vec!["org_id".into(), "ts".into()],
             reserved: None,
+            partition_by: None,
+            ttl: None,
+            indexes: vec![],
+            settings: vec![],
         }
     }
 
@@ -115,6 +132,43 @@ mod tests {
         assert!(ddl.contains("raw String"));
         assert!(ddl.contains("ENGINE = MergeTree()"));
         assert!(ddl.contains("ORDER BY (org_id, ts)"));
+    }
+
+    #[test]
+    fn carries_partition_ttl_indexes_settings_into_ddl() {
+        use crate::table::{IndexSpec, TtlMove, TtlSpec};
+
+        let mut cfg = config();
+        cfg.partition_by = Some("(org_id, toDate(ts))".into());
+        cfg.ttl = Some(TtlSpec {
+            column: "ts".into(),
+            move_to_volume_after: Some(TtlMove {
+                interval: "7 DAY".into(),
+                volume: "cold".into(),
+            }),
+            delete_after: Some("90 DAY".into()),
+        });
+        cfg.indexes = vec![IndexSpec {
+            name: "idx_status".into(),
+            expression: "status".into(),
+            type_def: "bloom_filter(0.01)".into(),
+            granularity: 1,
+        }];
+        cfg.settings = vec![("index_granularity".into(), "8192".into())];
+
+        let spec = flexible_table("events", cfg, &SchemaLimits::default()).unwrap();
+        let ddl = to_create_table_sql(&spec, &SchemaLimits::default()).unwrap();
+
+        assert!(ddl.contains("PARTITION BY (org_id, toDate(ts))"), "{ddl}");
+        assert!(
+            ddl.contains("    INDEX idx_status status TYPE bloom_filter(0.01) GRANULARITY 1"),
+            "{ddl}"
+        );
+        assert!(
+            ddl.contains("TTL toDateTime(ts) + INTERVAL 7 DAY TO VOLUME 'cold', toDateTime(ts) + INTERVAL 90 DAY DELETE"),
+            "{ddl}"
+        );
+        assert!(ddl.contains("SETTINGS index_granularity = 8192"), "{ddl}");
     }
 
     #[test]
