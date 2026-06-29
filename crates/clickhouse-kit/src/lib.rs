@@ -26,7 +26,10 @@ pub mod safety;
 pub mod table;
 
 pub use client::{ChError, ChExecutor};
-pub use codegen::{ch_type_to_rust, rust_row_struct};
+pub use codegen::{
+    ch_type_to_rust, emit_insert_schema, emit_row_interface, emit_select_schema, emit_ts_module,
+    insert_schema_name, row_type_name, rust_row_struct, select_schema_name,
+};
 pub use drift::{check_drift, Drift, DriftResult};
 pub use evolve::{alter_add_columns_sql, diff_columns, ColumnDiff, LiveColumn};
 pub use flatten::{coerce_to_table, flatten_record, CoerceResult, FlattenOptions};
@@ -35,6 +38,7 @@ pub use introspect::{introspect_columns, introspect_row_struct};
 pub use migrate::{run_migrations, split_sql_statements, MigrationRunResult};
 pub use safety::{
     assert_column_count, assert_not_reserved, quote_identifier, validate_identifier,
-    ColumnTypeSpec, ScalarType, SchemaError, SchemaLimits, StringOnly, DEFAULT_RESERVED_COLUMNS,
+    ColumnTypeSpec, DateTime64Spec, ScalarType, SchemaError, SchemaLimits, StringOnly,
+    DEFAULT_RESERVED_COLUMNS,
 };
-pub use table::{to_create_table_sql, ColumnSpec, TableSpec};
+pub use table::{to_create_table_sql, ColumnSpec, IndexSpec, TableSpec, TtlMove, TtlSpec};

@@ -143,6 +143,10 @@ mod tests {
             columns: vec![col("id", ScalarType::Uuid), col("name", ScalarType::String)],
             engine: "MergeTree()".into(),
             order_by: vec!["id".into()],
+            partition_by: None,
+            ttl: None,
+            indexes: vec![],
+            settings: vec![],
         }
     }
 

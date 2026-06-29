@@ -1,10 +1,10 @@
-// @smooai/clickhouse-kit — TS-only, Drizzle-shaped schema kit for ClickHouse.
+// @smooai/clickhouse-kit — TS-only, schema-as-code kit for ClickHouse.
 //
 // Define a table ONCE with `clickhouseTable(...)` and get: the `CREATE TABLE` DDL
 // (`toCreateTableSql`), the inferred TS row type (`typeof table.$inferSelect`),
-// and select/insert Zod (`createSelectSchema`/`createInsertSchema`) — mirroring
-// the Drizzle + drizzle-zod ergonomics. Forward-only by design: there is NO schema
-// differ (schema changes are hand-authored migrations, like Drizzle custom SQL).
+// and select/insert Zod (`createSelectSchema`/`createInsertSchema`). Forward-only
+// by design: there is NO schema differ (schema changes are hand-authored
+// migrations as custom SQL).
 
 import { z } from "zod";
 
@@ -175,12 +175,12 @@ export function toCreateTableSql<C extends ChColumns>(table: ChTable<C>): string
   return parts.join("\n");
 }
 
-// ── Zod (drizzle-zod ergonomics) ─────────────────────────────────────────────
+// ── Zod schema emitters ──────────────────────────────────────────────────────
 type ShapeOf<C extends ChColumns> = {
   [K in keyof C]: C[K] extends ChColumn<infer T> ? z.ZodType<T> : never;
 };
 
-/** Zod schema for a row as read from ClickHouse. Pass `overrides` to refine columns (like drizzle-zod). */
+/** Zod schema for a row as read from ClickHouse. Pass `overrides` to refine columns. */
 export function createSelectSchema<C extends ChColumns>(
   table: ChTable<C>,
   overrides?: Partial<Record<keyof C, z.ZodTypeAny>>,

@@ -1,7 +1,7 @@
 // @smooai/clickhouse-kit — public API.
 //
-// "Drizzle for ClickHouse": define a table once, get the DDL, the inferred row
-// type, and drizzle-zod-style select/insert schemas. Forward-only migrations
+// Schema-as-code for ClickHouse: define a table once, get the DDL, the inferred
+// row type, and select/insert Zod schemas. Forward-only migrations
 // (no auto-diff engine) that ride your own ClickHouse client + a drift gate.
 
 export {

@@ -56,6 +56,8 @@ let ddl = to_create_table_sql(&table, &SchemaLimits::default())?;
 
 Every identifier is validated (`^[A-Za-z_][A-Za-z0-9_]*$` + a length bound, backtick-quoted on render), column counts are bounded, and `ORDER BY` entries must be real columns — so a malicious table/column name can't inject SQL.
 
+Need an explicit precision/timezone? Use the parametrised `DateTime64` type — `{"datetime64": {"precision": 3, "timezone": "UTC"}}` renders `DateTime64(3, 'UTC')` (bare `"DateTime64"` still renders `DateTime64(3)`). Precision (`0..=9`) and the timezone charset (`^[A-Za-z0-9_+/-]{1,64}$`, the IANA shape) are validated before they reach SQL, so an untrusted timezone string can't inject.
+
 ## The flexible (hybrid) table
 
 The most-reused multi-tenant shape in one call — your mandatory + promoted typed columns, plus an `attrs Map(String, String)` catch-all and a `raw String`:
@@ -75,6 +77,40 @@ let table = flexible_table(
     &SchemaLimits::default(),
 )?;
 ```
+
+## Production-table DDL: partitioning, TTL, indexes, settings
+
+Real production tables need `PARTITION BY`, a TTL policy, data-skipping indexes, and `SETTINGS`. `TableSpec` (and `FlexibleConfig`) carry these as additive fields, rendered in canonical ClickHouse clause order — `ENGINE` → `PARTITION BY` → `ORDER BY` → `TTL` → `SETTINGS`, with `INDEX` lines inside the column parens:
+
+```rust
+use clickhouse_kit::{IndexSpec, TableSpec, TtlMove, TtlSpec};
+
+let table = TableSpec {
+    // ...columns, engine, order_by...
+    partition_by: Some("(organization_id, toDate(started_at))".into()),
+    indexes: vec![IndexSpec {
+        name: "idx_trace_id".into(),
+        expression: "trace_id".into(),
+        type_def: "bloom_filter(0.01)".into(),
+        granularity: 1,
+    }],
+    ttl: Some(TtlSpec {
+        column: "started_at".into(),
+        move_to_volume_after: Some(TtlMove { interval: "14 DAY".into(), volume: "cold".into() }),
+        delete_after: Some("180 DAY".into()),
+    }),
+    settings: vec![
+        ("storage_policy".into(), "'hot_cold'".into()),
+        ("index_granularity".into(), "8192".into()),
+    ],
+    // ...
+};
+// TTL toDateTime(started_at) + INTERVAL 14 DAY TO VOLUME 'cold', toDateTime(started_at) + INTERVAL 180 DAY DELETE
+```
+
+A `DateTime64` TTL column is automatically wrapped in `toDateTime(...)`. All four fields are optional/empty by default, so existing specs render exactly as before.
+
+**Safety posture:** these knobs are **app-controlled raw fragments** emitted verbatim — `partition_by`, the index `expression`/`type_def`, the TTL `interval`/`volume`/`delete_after`, and the settings RHS values are _not_ validated, exactly like `engine`. Only identifiers are validated: the index `name`, and the TTL `column` (which must also be a real column in the table). Never build the raw fragments from untrusted input.
 
 ## Ingest: flatten + coerce
 
