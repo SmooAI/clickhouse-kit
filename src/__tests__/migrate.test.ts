@@ -38,7 +38,7 @@ describe("splitSqlStatements", () => {
 describe("runClickHouseMigrations", () => {
   let dir: string;
   beforeEach(() => {
-    dir = mkdtempSync(path.join(tmpdir(), "chkit-"));
+    dir = mkdtempSync(path.join(tmpdir(), "smooai-ch-kit-"));
     writeFileSync(path.join(dir, "0001_a.sql"), "CREATE TABLE a (x String) ENGINE = Memory;\n");
     writeFileSync(path.join(dir, "0002_b.sql"), "CREATE TABLE b (y String) ENGINE = Memory;\n");
   });
