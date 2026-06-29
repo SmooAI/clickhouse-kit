@@ -5,9 +5,14 @@
 [![CI](https://github.com/SmooAI/clickhouse-kit/actions/workflows/rust.yml/badge.svg)](https://github.com/SmooAI/clickhouse-kit/actions/workflows/rust.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](./LICENSE)
 
-**A safe-by-construction schema toolkit for ClickHouse — built for user-defined, multi-tenant schemas.**
+**A safe-by-construction schema toolkit for ClickHouse — for user-defined, multi-tenant schemas, with a TypeScript→Rust bridge for the schemas you author by hand.**
 
-When your customers' data shapes are defined at runtime, you end up turning untrusted input into SQL. `smooai-clickhouse-kit` owns that boundary so the happy path makes **SQL injection and unbounded tables impossible, not merely discouraged** — an allowlisted type system, identifier validation, DDL generation, forward-only migrations, additive evolution, and drift detection. Rows stay [Serde](https://serde.rs)-native (use the [`clickhouse`](https://crates.io/crates/clickhouse) crate's `#[derive(Row)]`), so the kit never reimplements row mapping.
+The kit has two jobs:
+
+1. **Runtime toolkit (user-defined / multi-tenant tables).** When your customers' data shapes are defined at runtime, you end up turning untrusted input into SQL. The kit owns that boundary so the happy path makes **SQL injection and unbounded tables impossible, not merely discouraged** — an allowlisted type system, identifier validation, DDL generation, `flexible_table`, forward-only migrations, and additive evolution.
+2. **TS→Rust bridge (developer-authored tables).** When TypeScript owns a table's schema, `introspect` reads the live ClickHouse back into Rust and `codegen` emits the `#[derive(Row)]` struct, with `check_drift` asserting the Rust view ≡ the live DB. No more hand-copied row structs drifting from the schema.
+
+Either way, rows stay [Serde](https://serde.rs)-native (use the [`clickhouse`](https://crates.io/crates/clickhouse) crate's `#[derive(Row)]`) — the kit never reimplements row mapping.
 
 ```toml
 [dependencies]
@@ -97,6 +102,27 @@ let drift = check_drift(&exec, &[table]).await?;
 ```
 
 For growing a per-tenant table, `diff_columns` + `alter_add_columns_sql` emit a guarded, **additive-only** `ALTER TABLE … ADD COLUMN IF NOT EXISTS …` (identifiers quoted; types from your trusted spec, never from the live DB).
+
+## TS→Rust bridge: generate Rust rows from a TS-authored table
+
+When the schema lives in TypeScript, you don't hand-write (and re-sync) the Rust row struct — introspect the live table and generate it:
+
+```rust
+use clickhouse_kit::introspect_row_struct;
+
+// Reads system.columns for `events` and emits the Rust source:
+let src = introspect_row_struct(&exec, "events", "EventRow").await?;
+// #[derive(Debug, Clone, clickhouse::Row, serde::Serialize, serde::Deserialize)]
+// pub struct EventRow {
+//     pub id: String,                                       // UUID
+//     pub org: String,                                      // LowCardinality(String)
+//     pub n: u64,
+//     pub tags: Vec<String>,
+//     pub attrs: std::collections::HashMap<String, String>,
+// }
+```
+
+`ch_type_to_rust` / `rust_row_struct` are also exposed directly. Pair this with `check_drift` in CI to assert the generated Rust view stays ≡ the live (TS-owned) schema — so the Rust side can never silently diverge.
 
 ## Design
 
