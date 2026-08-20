@@ -47,6 +47,12 @@ jobs:
       - name: Lint
         run: pnpm lint
 
+      # Also on main, not just PRs: `changeset version` rewrites CHANGELOG.md,
+      # and an unformatted result used to land silently here and then red-line
+      # the next unrelated PR (that is what commit #14 was cleaning up).
+      - name: Format check
+        run: pnpm format:check
+
       - name: Test
         run: pnpm test
 
@@ -57,8 +63,9 @@ jobs:
       - name: Build
         run: pnpm build
 
-      # `pnpm run version` = `changeset version && sync-versions`, so the crate
-      # manifests are bumped inside the release commit rather than after publish.
+      # `pnpm run version` = `changeset version && sync-versions && format`, so
+      # the crate manifests are bumped — and the rewritten CHANGELOG formatted —
+      # inside the release commit rather than after publish.
       - name: Changesets — version (+ publish when NPM_TOKEN present) 🦋
         uses: changesets/action@v1
         with:
