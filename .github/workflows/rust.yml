@@ -1,12 +1,15 @@
 name: Rust
 
 on:
+  # `spec/**` is in the filter because the cross-language parity corpus lives
+  # there: adding a case to it must run BOTH languages' suites, and a filter of
+  # `crates/**` alone would leave the Rust half unrun on a corpus-only change.
   pull_request:
     branches: [main]
-    paths: ["crates/**", ".github/workflows/rust.yml"]
+    paths: ["crates/**", "spec/**", ".github/workflows/rust.yml"]
   push:
     branches: [main]
-    paths: ["crates/**"]
+    paths: ["crates/**", "spec/**"]
 
 defaults:
   run:

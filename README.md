@@ -228,6 +228,14 @@ Full Rust walkthrough (every runtime primitive, with the safety posture spelled 
 - **TypeScript** — `pr-checks.yml` on every PR: typecheck → lint → format check → test → **version lockstep check** → build. Publishing via changesets (`release.yml`).
 - **Rust** — `rust.yml` on PRs + main: `cargo fmt --check` → `clippy --all-targets -D warnings` → unit tests → testcontainers integration against real ClickHouse. Crate publishing is a manual `publish-crate.yml` dispatch after a version bump.
 
+### Cross-language parity corpus
+
+Where both languages implement the same behaviour, they are checked against **one committed set of expectations** rather than two hand-mirrored ones. [`spec/parity-corpus.json`](spec/parity-corpus.json) is loaded by `src/__tests__/parity.test.ts` and `crates/clickhouse-kit/tests/parity.rs` alike, covering flatten, the column-type allowlist, and identifier validation.
+
+It exists because the alternative failed silently: the two flatteners disagreed about what `maxDepth` counts — TS reached `{"a.b": "{\"c\":1}"}` at `maxDepth` 1, Rust needed 2 — and both suites were green the whole time, each asserting its own answer. Add a case here and it must pass in every language or the build is red. (`rust.yml`'s path filter includes `spec/**` so a corpus-only change actually runs the Rust half.)
+
+The migration runner and drift gate also exist on both sides, but they are I/O against a live ClickHouse; their agreement is covered by the Rust testcontainers suites rather than by this corpus.
+
 ### Versioning policy — lockstep
 
 **The npm package and the crate share one version number.** `package.json` is the single source of truth; `scripts/sync-versions.mjs` writes it into `crates/clickhouse-kit/Cargo.toml` and `Cargo.lock`.
