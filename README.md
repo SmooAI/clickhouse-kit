@@ -23,13 +23,13 @@
 
 ---
 
-> **ClickHouse has two schema populations, and they have different natural owners.** Tables a *developer* authors (observability, metrics, billing) are best written once, in code, with inferred row types — that's the **TypeScript package**. Tables your *customers* define at runtime (multi-tenant, user-driven shapes) mean turning untrusted input into SQL — that boundary belongs in the process holding the input, so the runtime engine is **canonical in Rust**: an allowlisted type system where SQL injection and unbounded tables are **impossible by construction, not merely discouraged**. Two packages, one deliberate split — and a TS→Rust bridge so the Rust side never hand-copies a TS-owned schema.
+> **ClickHouse has two schema populations, and they have different natural owners.** Tables a _developer_ authors (observability, metrics, billing) are best written once, in code, with inferred row types — that's the **TypeScript package**. Tables your _customers_ define at runtime (multi-tenant, user-driven shapes) mean turning untrusted input into SQL — that boundary belongs in the process holding the input, so the runtime engine is **canonical in Rust**: an allowlisted type system where SQL injection and unbounded tables are **impossible by construction, not merely discouraged**. Two packages, one deliberate split — and a TS→Rust bridge so the Rust side never hand-copies a TS-owned schema.
 
 ## What is this?
 
 A schema toolkit for ClickHouse, shipped as two packages from one repo:
 
-- **[`@smooai/clickhouse-kit`](https://www.npmjs.com/package/@smooai/clickhouse-kit)** (npm, TypeScript) — schema-as-code authoring: `clickhouseTable(...)` → DDL + inferred row type (`InferSelect`) + Zod select/insert schemas, materialized views, forward-only migration *generation* (numbered files + journal) and a migration runner + drift gate that ride your own ClickHouse client.
+- **[`@smooai/clickhouse-kit`](https://www.npmjs.com/package/@smooai/clickhouse-kit)** (npm, TypeScript) — schema-as-code authoring: `clickhouseTable(...)` → DDL + inferred row type (`InferSelect`) + Zod select/insert schemas, materialized views, forward-only migration _generation_ (numbered files + journal) and a migration runner + drift gate that ride your own ClickHouse client.
 - **[`smooai-clickhouse-kit`](https://crates.io/crates/smooai-clickhouse-kit)** (crates.io, Rust — imports as `clickhouse_kit`) — the runtime engine for user-defined / multi-tenant tables (allowlisted types, identifier validation, bounds, `flexible_table`, flatten + coerce, additive evolution), plus the TS→Rust bridge: live-DB introspection → generated `#[derive(Row)]` structs, drift checking, and a driver-agnostic migration runner. Rows stay [Serde](https://serde.rs)-native — the kit never reimplements row mapping.
 
 **Deliberately no WASM/npm binding of the Rust crate** — each language authors in its own kit; the bridge meets at the live database.
@@ -60,17 +60,17 @@ flowchart LR
 
 The honest per-package capability matrix — the split is intentional, not backlog:
 
-| Capability | TS `@smooai/clickhouse-kit` | Rust `smooai-clickhouse-kit` |
-| --- | --- | --- |
-| Static schema authoring (`clickhouseTable`, `ch.*`, materialized views, TTL / indexes / settings) | ✅ **source of truth** | — (runtime `TableSpec` carries the same DDL clauses, but authoring DX is TS) |
-| Inferred row types + Zod select/insert schemas | ✅ `InferSelect`, `createSelectSchema` | ✅ emits them as generated TS source (`emit_ts_module`) |
-| Migration file *generation* (numbered files + journal) | ✅ `generateClickHouseMigrations` | ❌ |
-| Forward-only migration *runner* (bring your own client) | ✅ `runClickHouseMigrations` | ✅ `run_migrations` over the `ChExecutor` trait |
-| Drift gate (live `system.columns` vs. declared schema) | ✅ `checkClickHouseDrift` | ✅ `check_drift` |
-| Safety primitives — type allowlist, identifier validation, bounds, reserved columns | ✅ | ✅ **canonical** |
-| Runtime / user-defined tables, `flexibleTable`, flatten + coerce, additive-only evolution | ✅ | ✅ **canonical** |
-| Live-DB introspection → Rust `#[derive(Row)]` structs | ❌ | ✅ `introspect_row_struct` |
-| Integration-tested against real ClickHouse (testcontainers) in CI | ❌ (unit tests only) | ✅ three integration suites |
+| Capability                                                                                        | TS `@smooai/clickhouse-kit`            | Rust `smooai-clickhouse-kit`                                                 |
+| ------------------------------------------------------------------------------------------------- | -------------------------------------- | ---------------------------------------------------------------------------- |
+| Static schema authoring (`clickhouseTable`, `ch.*`, materialized views, TTL / indexes / settings) | ✅ **source of truth**                 | — (runtime `TableSpec` carries the same DDL clauses, but authoring DX is TS) |
+| Inferred row types + Zod select/insert schemas                                                    | ✅ `InferSelect`, `createSelectSchema` | ✅ emits them as generated TS source (`emit_ts_module`)                      |
+| Migration file _generation_ (numbered files + journal)                                            | ✅ `generateClickHouseMigrations`      | ❌                                                                           |
+| Forward-only migration _runner_ (bring your own client)                                           | ✅ `runClickHouseMigrations`           | ✅ `run_migrations` over the `ChExecutor` trait                              |
+| Drift gate (live `system.columns` vs. declared schema)                                            | ✅ `checkClickHouseDrift`              | ✅ `check_drift`                                                             |
+| Safety primitives — type allowlist, identifier validation, bounds, reserved columns               | ✅                                     | ✅ **canonical**                                                             |
+| Runtime / user-defined tables, `flexibleTable`, flatten + coerce, additive-only evolution         | ✅                                     | ✅ **canonical**                                                             |
+| Live-DB introspection → Rust `#[derive(Row)]` structs                                             | ❌                                     | ✅ `introspect_row_struct`                                                   |
+| Integration-tested against real ClickHouse (testcontainers) in CI                                 | ❌ (unit tests only)                   | ✅ three integration suites                                                  |
 
 Rule of thumb: **authoring a developer table → TS. Holding untrusted customer input, or in a Rust service → Rust.**
 
@@ -80,13 +80,13 @@ Rule of thumb: **authoring a developer table → TS. Holding untrusted customer 
 
 Every snippet is the actual API, verified against the source.
 
-| | Capability | Package |
-| --- | --- | --- |
-| 📐 | [**Schema-as-code authoring**](#-schema-as-code-authoring-ts) | TS |
-| 🛡️ | [**Untrusted input → safe DDL**](#%EF%B8%8F-untrusted-input--safe-ddl-rust) | Rust |
-| 🧩 | [**The flexible (hybrid) table**](#-the-flexible-hybrid-table-both) | both |
-| ⏩ | [**Forward-only migrations + drift**](#-forward-only-migrations--drift-both) | both |
-| 🌉 | [**TS→Rust bridge**](#-tsrust-bridge-rust) | Rust |
+|     | Capability                                                                   | Package |
+| --- | ---------------------------------------------------------------------------- | ------- |
+| 📐  | [**Schema-as-code authoring**](#-schema-as-code-authoring-ts)                | TS      |
+| 🛡️  | [**Untrusted input → safe DDL**](#%EF%B8%8F-untrusted-input--safe-ddl-rust)  | Rust    |
+| 🧩  | [**The flexible (hybrid) table**](#-the-flexible-hybrid-table-both)          | both    |
+| ⏩  | [**Forward-only migrations + drift**](#-forward-only-migrations--drift-both) | both    |
+| 🌉  | [**TS→Rust bridge**](#-tsrust-bridge-rust)                                   | Rust    |
 
 ### 📐 Schema-as-code authoring (TS)
 
@@ -109,14 +109,18 @@ export const events = clickhouseTable(
     engine: "MergeTree()",
     partitionBy: "(org_id, toDate(ts))",
     orderBy: ["org_id", "ts", "event_id"],
-    ttl: { column: "ts", moveToVolumeAfter: { interval: "14 DAY", volume: "cold" }, deleteAfter: "90 DAY" },
+    ttl: {
+      column: "ts",
+      moveToVolumeAfter: { interval: "14 DAY", volume: "cold" },
+      deleteAfter: "90 DAY",
+    },
     indexes: [{ name: "idx_name", expr: "name", type: "bloom_filter(0.01)", granularity: 1 }],
     settings: { storage_policy: "hot_cold", index_granularity: 8192 },
   },
 );
 
-export type EventRow = InferSelect<typeof events>;      // inferred, not hand-written
-export const selectEventSchema = createSelectSchema(events);  // Zod validator for reads
+export type EventRow = InferSelect<typeof events>; // inferred, not hand-written
+export const selectEventSchema = createSelectSchema(events); // Zod validator for reads
 ```
 
 ### 🛡️ Untrusted input → safe DDL (Rust)
@@ -163,7 +167,7 @@ let shaped = coerce_to_table(input_json, &table, &FlattenOptions::default());
 
 ### ⏩ Forward-only migrations + drift (both)
 
-No auto-diff engine — schema changes are explicit numbered migrations, tracked in `_ch_migrations`, applied forward-only. TS *generates* the files (`generateClickHouseMigrations` + a journal); both sides *run* them and both gate drift against live `system.columns`. The I/O layer is a tiny trait/interface, so neither package pins your ClickHouse driver:
+No auto-diff engine — schema changes are explicit numbered migrations, tracked in `_ch_migrations`, applied forward-only. TS _generates_ the files (`generateClickHouseMigrations` + a journal); both sides _run_ them and both gate drift against live `system.columns`. The I/O layer is a tiny trait/interface, so neither package pins your ClickHouse driver:
 
 ```rust
 use clickhouse_kit::{run_migrations, check_drift};
