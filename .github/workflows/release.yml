@@ -17,10 +17,11 @@ jobs:
       contents: write
       pull-requests: write
       id-token: write
-    # Publish to npm only when an NPM_TOKEN secret is configured; otherwise run in
-    # version-only mode (open the "Version Packages" PR when changesets exist).
-    # This keeps the workflow green before npm publishing is set up, and starts
-    # publishing automatically once the token is added — no further edits needed.
+    # Publish to npm when the org's NPM_TOKEN secret is visible to this repo;
+    # otherwise fall back to version-only mode (open the "Version Packages" PR
+    # when changesets exist) rather than failing the run. The token IS configured
+    # — @smooai/clickhouse-kit publishes from here — so the fallback is a
+    # safety net for a token/visibility lapse, not a pre-launch placeholder.
     env:
       HAS_NPM_TOKEN: ${{ secrets.SMOOAI_NPM_TOKEN != '' }}
     steps:
@@ -49,13 +50,19 @@ jobs:
       - name: Test
         run: pnpm test
 
+      # Fails (never warns) if the crate manifests have drifted from package.json.
+      - name: Version lockstep check
+        run: pnpm version:check
+
       - name: Build
         run: pnpm build
 
+      # `pnpm run version` = `changeset version && sync-versions`, so the crate
+      # manifests are bumped inside the release commit rather than after publish.
       - name: Changesets — version (+ publish when NPM_TOKEN present) 🦋
         uses: changesets/action@v1
         with:
-          version: pnpm changeset version
+          version: pnpm run version
           publish: ${{ env.HAS_NPM_TOKEN == 'true' && 'pnpm ci:publish' || '' }}
           commit: "🦋 New version release"
           title: "🦋 New version release"

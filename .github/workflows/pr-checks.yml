@@ -34,5 +34,9 @@ jobs:
       - name: Test
         run: pnpm test
 
+      # Fails (never warns) if the crate manifests have drifted from package.json.
+      - name: Version lockstep check
+        run: pnpm version:check
+
       - name: Build
         run: pnpm build

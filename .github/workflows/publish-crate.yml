@@ -14,5 +14,8 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
+      # No `--allow-dirty`: the crate version is synced into the release commit
+      # by `scripts/sync-versions.mjs`, so a dirty tree here means something is
+      # genuinely out of step and the publish should fail rather than paper over it.
       - name: Publish to crates.io
-        run: cargo publish --allow-dirty --token ${{ secrets.SMOOAI_CARGO_REGISTRY_TOKEN }}
+        run: cargo publish --locked --token ${{ secrets.SMOOAI_CARGO_REGISTRY_TOKEN }}

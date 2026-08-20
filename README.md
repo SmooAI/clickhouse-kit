@@ -196,13 +196,13 @@ Codegen runs the other direction too: `emit_row_interface` / `emit_select_schema
 
 Both packages are published — these install lines were verified against the live registries:
 
-**TypeScript** (npm, currently `0.2.0`):
+**TypeScript** (npm):
 
 ```bash
 pnpm add @smooai/clickhouse-kit zod   # zod ^4 is a peer dependency
 ```
 
-**Rust** (crates.io, currently `0.3.0` — the crate is `smooai-clickhouse-kit`, it imports as `clickhouse_kit`):
+**Rust** (crates.io — the crate is `smooai-clickhouse-kit`, it imports as `clickhouse_kit`):
 
 ```toml
 [dependencies]
@@ -225,8 +225,19 @@ Full Rust walkthrough (every runtime primitive, with the safety posture spelled 
 
 ## CI + publishing
 
-- **TypeScript** — `pr-checks.yml` on every PR: typecheck → lint → format check → test → build. Publishing via changesets (`release.yml`).
+- **TypeScript** — `pr-checks.yml` on every PR: typecheck → lint → format check → test → **version lockstep check** → build. Publishing via changesets (`release.yml`).
 - **Rust** — `rust.yml` on PRs + main: `cargo fmt --check` → `clippy --all-targets -D warnings` → unit tests → testcontainers integration against real ClickHouse. Crate publishing is a manual `publish-crate.yml` dispatch after a version bump.
+
+### Versioning policy — lockstep
+
+**The npm package and the crate share one version number.** `package.json` is the single source of truth; `scripts/sync-versions.mjs` writes it into `crates/clickhouse-kit/Cargo.toml` and `Cargo.lock`.
+
+- Every change — TS or Rust — gets a changeset naming the **npm package** (`@smooai/clickhouse-kit`), never the crate name (`smooai-clickhouse-kit`). A changeset naming the crate makes `changeset version` fail outright: changesets only knows the workspace's npm packages. That mistake blocked every release from 2026-06-29 to 2026-08-20.
+- `pnpm run version` (what `release.yml` hands to the changesets action) is `changeset version && node scripts/sync-versions.mjs`, so the synced manifests are committed **with** the bump. Syncing after `changeset publish` — the pattern this replaced elsewhere — leaves every git tag carrying stale version constants.
+- `pnpm version:check` (`sync-versions.mjs --check`) runs in `pr-checks.yml` and `release.yml` and **fails**, never warns, on any drift.
+- Adding a new version-bearing file? Add a row to the `targets` table in `scripts/sync-versions.mjs` and the guard covers it.
+
+npm skipped `0.3.0`: the crate had already published `0.3.0` when the two were aligned, so npm resumes at the next bump.
 
 ## 🧩 Part of Smoo AI
 
