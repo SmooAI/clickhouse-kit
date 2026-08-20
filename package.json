@@ -1,6 +1,6 @@
 {
   "name": "@smooai/clickhouse-kit",
-  "version": "0.4.0",
+  "version": "0.5.0",
   "description": "TS-only schema-as-code toolkit for ClickHouse — declarative schemas, Zod schema emitters, forward-only migrations, and drift detection.",
   "keywords": [
     "clickhouse",
