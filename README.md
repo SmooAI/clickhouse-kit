@@ -1,34 +1,130 @@
-# smooai-clickhouse-kit
+<h1 align="center">clickhouse-kit</h1>
 
-[![crates.io](https://img.shields.io/crates/v/smooai-clickhouse-kit.svg)](https://crates.io/crates/smooai-clickhouse-kit)
-[![docs.rs](https://img.shields.io/docsrs/smooai-clickhouse-kit)](https://docs.rs/smooai-clickhouse-kit)
-[![CI](https://github.com/SmooAI/clickhouse-kit/actions/workflows/rust.yml/badge.svg)](https://github.com/SmooAI/clickhouse-kit/actions/workflows/rust.yml)
-[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](./LICENSE)
+<p align="center">
+  <a href="https://smoo.ai"><img src="https://img.shields.io/badge/Smoo_AI-platform-00A6A6?style=for-the-badge&labelColor=020618" alt="Smoo AI"></a>
+  <a href="./LICENSE"><img src="https://img.shields.io/badge/license-MIT-F49F0A?style=for-the-badge&labelColor=020618" alt="license"></a>
+  <a href="https://smoo.ai/open-source"><img src="https://img.shields.io/badge/open_source-smoo.ai-FF6B6C?style=for-the-badge&labelColor=020618" alt="smoo.ai open source"></a>
+</p>
 
-**A safe-by-construction schema toolkit for ClickHouse — for user-defined, multi-tenant schemas, with a TypeScript→Rust bridge for the schemas you author by hand.**
+<p align="center">
+  <a href="https://www.npmjs.com/package/@smooai/clickhouse-kit"><img src="https://img.shields.io/npm/v/%40smooai%2Fclickhouse-kit?labelColor=020618&color=00A6A6" alt="npm"></a>
+  <a href="https://crates.io/crates/smooai-clickhouse-kit"><img src="https://img.shields.io/crates/v/smooai-clickhouse-kit.svg?labelColor=020618&color=F49F0A" alt="crates.io"></a>
+  <a href="https://docs.rs/smooai-clickhouse-kit"><img src="https://img.shields.io/docsrs/smooai-clickhouse-kit?labelColor=020618&color=FF6B6C" alt="docs.rs"></a>
+</p>
 
-The kit has two jobs:
+<p align="center">
+  <a href="https://github.com/SmooAI/clickhouse-kit/actions/workflows/rust.yml"><img src="https://github.com/SmooAI/clickhouse-kit/actions/workflows/rust.yml/badge.svg" alt="Rust CI"></a>
+  <a href="https://github.com/SmooAI/clickhouse-kit/actions/workflows/pr-checks.yml"><img src="https://github.com/SmooAI/clickhouse-kit/actions/workflows/pr-checks.yml/badge.svg?event=pull_request" alt="TypeScript PR checks"></a>
+</p>
 
-1. **Runtime toolkit (user-defined / multi-tenant tables).** When your customers' data shapes are defined at runtime, you end up turning untrusted input into SQL. The kit owns that boundary so the happy path makes **SQL injection and unbounded tables impossible, not merely discouraged** — an allowlisted type system, identifier validation, DDL generation, `flexible_table`, forward-only migrations, and additive evolution.
-2. **TS→Rust bridge (developer-authored tables).** When TypeScript owns a table's schema, `introspect` reads the live ClickHouse back into Rust and `codegen` emits the `#[derive(Row)]` struct, with `check_drift` asserting the Rust view ≡ the live DB. No more hand-copied row structs drifting from the schema.
+<p align="center">
+  <a href="#what-is-this"><b>What it is</b></a> &nbsp;·&nbsp; <a href="#which-language-owns-what"><b>Two languages, one split</b></a> &nbsp;·&nbsp; <a href="#feature-tour"><b>Feature tour</b></a> &nbsp;·&nbsp; <a href="#quickstart"><b>Quickstart</b></a> &nbsp;·&nbsp; <a href="#-part-of-smoo-ai"><b>Platform</b></a>
+</p>
 
-Either way, rows stay [Serde](https://serde.rs)-native (use the [`clickhouse`](https://crates.io/crates/clickhouse) crate's `#[derive(Row)]`) — the kit never reimplements row mapping.
+---
 
-```toml
-[dependencies]
-smooai-clickhouse-kit = "0.1"
+> **ClickHouse has two schema populations, and they have different natural owners.** Tables a *developer* authors (observability, metrics, billing) are best written once, in code, with inferred row types — that's the **TypeScript package**. Tables your *customers* define at runtime (multi-tenant, user-driven shapes) mean turning untrusted input into SQL — that boundary belongs in the process holding the input, so the runtime engine is **canonical in Rust**: an allowlisted type system where SQL injection and unbounded tables are **impossible by construction, not merely discouraged**. Two packages, one deliberate split — and a TS→Rust bridge so the Rust side never hand-copies a TS-owned schema.
+
+## What is this?
+
+A schema toolkit for ClickHouse, shipped as two packages from one repo:
+
+- **[`@smooai/clickhouse-kit`](https://www.npmjs.com/package/@smooai/clickhouse-kit)** (npm, TypeScript) — schema-as-code authoring: `clickhouseTable(...)` → DDL + inferred row type (`InferSelect`) + Zod select/insert schemas, materialized views, forward-only migration *generation* (numbered files + journal) and a migration runner + drift gate that ride your own ClickHouse client.
+- **[`smooai-clickhouse-kit`](https://crates.io/crates/smooai-clickhouse-kit)** (crates.io, Rust — imports as `clickhouse_kit`) — the runtime engine for user-defined / multi-tenant tables (allowlisted types, identifier validation, bounds, `flexible_table`, flatten + coerce, additive evolution), plus the TS→Rust bridge: live-DB introspection → generated `#[derive(Row)]` structs, drift checking, and a driver-agnostic migration runner. Rows stay [Serde](https://serde.rs)-native — the kit never reimplements row mapping.
+
+**Deliberately no WASM/npm binding of the Rust crate** — each language authors in its own kit; the bridge meets at the live database.
+
+```mermaid
+%%{init: {'theme':'base','themeVariables':{
+  'background':'#020618','primaryColor':'#0b1426','primaryTextColor':'#e6edf6','primaryBorderColor':'#2b3a52',
+  'lineColor':'#7c8aa0','secondaryColor':'#0b1426','tertiaryColor':'#0b1426','fontFamily':'ui-sans-serif, system-ui, sans-serif',
+  'clusterBkg':'#0b1426','clusterBorder':'#22304a'}}}%%
+flowchart LR
+  subgraph TS["TypeScript — static tables (source of truth)"]
+    AUTHOR["clickhouseTable(...)<br/>ch.* columns · MVs"] --> GEN["generate → numbered<br/>forward-only migrations"]
+  end
+  subgraph RS["Rust — dynamic tables (canonical engine)"]
+    SPEC["untrusted spec →<br/>allowlist · identifier · bounds"] --> DDL["to_create_table_sql ·<br/>flexible_table · additive ALTER"]
+  end
+  GEN -->|"runner + drift gate"| CH[("live ClickHouse<br/>system.columns")]
+  DDL --> CH
+  CH -->|"introspect_row_struct<br/>(TS→Rust bridge)"| ROW["generated #[derive(Row)]<br/>structs, drift-checked"]
+
+  classDef warm fill:#f49f0a,stroke:#ff6b6c,color:#1a0f00;
+  classDef teal fill:#00a6a6,stroke:#00c2c2,color:#011;
+  class RS,SPEC,DDL warm
+  class TS,AUTHOR,GEN,ROW teal
 ```
 
-> The crate is `smooai-clickhouse-kit`; it imports as **`clickhouse_kit`** — `use clickhouse_kit::...`.
+## Which language owns what
 
-## Turn untrusted input into safe DDL
+The honest per-package capability matrix — the split is intentional, not backlog:
 
-A column type can come straight from a customer config / JSON. The allowlist is an **enum** — disallowed types like `Decimal`, `FixedString`, `Tuple`, or arbitrary expressions simply have no representation, so they fail to deserialize at the boundary. There is no path to an arbitrary type string reaching the DDL.
+| Capability | TS `@smooai/clickhouse-kit` | Rust `smooai-clickhouse-kit` |
+| --- | --- | --- |
+| Static schema authoring (`clickhouseTable`, `ch.*`, materialized views, TTL / indexes / settings) | ✅ **source of truth** | — (runtime `TableSpec` carries the same DDL clauses, but authoring DX is TS) |
+| Inferred row types + Zod select/insert schemas | ✅ `InferSelect`, `createSelectSchema` | ✅ emits them as generated TS source (`emit_ts_module`) |
+| Migration file *generation* (numbered files + journal) | ✅ `generateClickHouseMigrations` | ❌ |
+| Forward-only migration *runner* (bring your own client) | ✅ `runClickHouseMigrations` | ✅ `run_migrations` over the `ChExecutor` trait |
+| Drift gate (live `system.columns` vs. declared schema) | ✅ `checkClickHouseDrift` | ✅ `check_drift` |
+| Safety primitives — type allowlist, identifier validation, bounds, reserved columns | ✅ | ✅ **canonical** |
+| Runtime / user-defined tables, `flexibleTable`, flatten + coerce, additive-only evolution | ✅ | ✅ **canonical** |
+| Live-DB introspection → Rust `#[derive(Row)]` structs | ❌ | ✅ `introspect_row_struct` |
+| Integration-tested against real ClickHouse (testcontainers) in CI | ❌ (unit tests only) | ✅ three integration suites |
+
+Rule of thumb: **authoring a developer table → TS. Holding untrusted customer input, or in a Rust service → Rust.**
+
+---
+
+## Feature tour
+
+Every snippet is the actual API, verified against the source.
+
+| | Capability | Package |
+| --- | --- | --- |
+| 📐 | [**Schema-as-code authoring**](#-schema-as-code-authoring-ts) | TS |
+| 🛡️ | [**Untrusted input → safe DDL**](#%EF%B8%8F-untrusted-input--safe-ddl-rust) | Rust |
+| 🧩 | [**The flexible (hybrid) table**](#-the-flexible-hybrid-table-both) | both |
+| ⏩ | [**Forward-only migrations + drift**](#-forward-only-migrations--drift-both) | both |
+| 🌉 | [**TS→Rust bridge**](#-tsrust-bridge-rust) | Rust |
+
+### 📐 Schema-as-code authoring (TS)
+
+Define a table once — DDL, inferred row type, and Zod schemas all come from the same literal. Production clauses (`PARTITION BY`, TTL with volume moves, skip indexes, `SETTINGS`) are first-class options:
+
+```ts
+import { ch, clickhouseTable, createSelectSchema, type InferSelect } from "@smooai/clickhouse-kit";
+
+export const events = clickhouseTable(
+  "events",
+  {
+    ts: ch.dateTime64(3),
+    org_id: ch.lowCardinality(ch.string()),
+    event_id: ch.uuid(),
+    value: ch.float64(),
+    attributes: ch.mapStringString(),
+    ingested_at: ch.dateTime().default("now()"),
+  },
+  {
+    engine: "MergeTree()",
+    partitionBy: "(org_id, toDate(ts))",
+    orderBy: ["org_id", "ts", "event_id"],
+    ttl: { column: "ts", moveToVolumeAfter: { interval: "14 DAY", volume: "cold" }, deleteAfter: "90 DAY" },
+    indexes: [{ name: "idx_name", expr: "name", type: "bloom_filter(0.01)", granularity: 1 }],
+    settings: { storage_policy: "hot_cold", index_granularity: 8192 },
+  },
+);
+
+export type EventRow = InferSelect<typeof events>;      // inferred, not hand-written
+export const selectEventSchema = createSelectSchema(events);  // Zod validator for reads
+```
+
+### 🛡️ Untrusted input → safe DDL (Rust)
+
+A column type can come straight from a customer config. The allowlist is an **enum** — disallowed types (`Decimal`, `FixedString`, `Tuple`, arbitrary expressions) have no representation, so they fail to deserialize at the boundary. There is no path from an arbitrary type string to DDL:
 
 ```rust
-use clickhouse_kit::{
-    to_create_table_sql, ColumnSpec, ColumnTypeSpec, ScalarType, SchemaLimits, TableSpec,
-};
+use clickhouse_kit::{to_create_table_sql, ColumnSpec, ColumnTypeSpec, ScalarType, SchemaLimits, TableSpec};
 
 // `{"lowCardinality": "String"}` from untrusted JSON — `Decimal(...)` here would be rejected.
 let org_type: ColumnTypeSpec = serde_json::from_str(r#"{"lowCardinality":"String"}"#)?;
@@ -42,131 +138,109 @@ let table = TableSpec {
     ],
     engine: "MergeTree()".into(),
     order_by: vec!["id".into()],
+    partition_by: None,
+    ttl: None,
+    indexes: vec![],
+    settings: vec![],
 };
 
 let ddl = to_create_table_sql(&table, &SchemaLimits::default())?;
-// CREATE TABLE IF NOT EXISTS events (
-//     id UUID,
-//     org LowCardinality(String),
-//     ts DateTime64(3)
-// )
-// ENGINE = MergeTree()
-// ORDER BY (id)
 ```
 
-Every identifier is validated (`^[A-Za-z_][A-Za-z0-9_]*$` + a length bound, backtick-quoted on render), column counts are bounded, and `ORDER BY` entries must be real columns — so a malicious table/column name can't inject SQL.
+Every identifier is validated (`^[A-Za-z_][A-Za-z0-9_]*$` + length bound, backtick-quoted on render), column counts are bounded, and `ORDER BY` entries must be real columns.
 
-Need an explicit precision/timezone? Use the parametrised `DateTime64` type — `{"datetime64": {"precision": 3, "timezone": "UTC"}}` renders `DateTime64(3, 'UTC')` (bare `"DateTime64"` still renders `DateTime64(3)`). Precision (`0..=9`) and the timezone charset (`^[A-Za-z0-9_+/-]{1,64}$`, the IANA shape) are validated before they reach SQL, so an untrusted timezone string can't inject.
+### 🧩 The flexible (hybrid) table (both)
 
-## The flexible (hybrid) table
-
-The most-reused multi-tenant shape in one call — your mandatory + promoted typed columns, plus an `attrs Map(String, String)` catch-all and a `raw String`:
+The most-reused multi-tenant shape in one call — mandatory + promoted typed columns, plus an `attrs Map(String, String)` catch-all and a `raw String` — with `flatten_record` / `coerce_to_table` (TS: `flattenRecord` / `coerceToTable`) to shape arbitrary records into it, and `diff_columns` + `alter_add_columns_sql` for **additive-only** evolution:
 
 ```rust
-use clickhouse_kit::{flexible_table, FlexibleConfig, ColumnSpec, ColumnTypeSpec, ScalarType, SchemaLimits};
+use clickhouse_kit::{flexible_table, coerce_to_table, FlexibleConfig, FlattenOptions, SchemaLimits};
 
-let table = flexible_table(
-    "customer_events",
-    FlexibleConfig {
-        mandatory: vec![ColumnSpec { name: "ts".into(), type_spec: ColumnTypeSpec::Scalar(ScalarType::DateTime64), default: None }],
-        promoted:  vec![ColumnSpec { name: "amount".into(), type_spec: ColumnTypeSpec::Scalar(ScalarType::Float64), default: None }],
-        engine: "MergeTree()".into(),
-        order_by: vec!["ts".into()],
-        reserved: None, // defaults to ["attrs", "raw"]
-    },
-    &SchemaLimits::default(),
-)?;
+let table = flexible_table("customer_events", config, &SchemaLimits::default())?;
+let shaped = coerce_to_table(input_json, &table, &FlattenOptions::default());
+// shaped.row → ready to insert · shaped.overflow_keys → what routed into `attrs`
 ```
 
-## Production-table DDL: partitioning, TTL, indexes, settings
+### ⏩ Forward-only migrations + drift (both)
 
-Real production tables need `PARTITION BY`, a TTL policy, data-skipping indexes, and `SETTINGS`. `TableSpec` (and `FlexibleConfig`) carry these as additive fields, rendered in canonical ClickHouse clause order — `ENGINE` → `PARTITION BY` → `ORDER BY` → `TTL` → `SETTINGS`, with `INDEX` lines inside the column parens:
-
-```rust
-use clickhouse_kit::{IndexSpec, TableSpec, TtlMove, TtlSpec};
-
-let table = TableSpec {
-    // ...columns, engine, order_by...
-    partition_by: Some("(organization_id, toDate(started_at))".into()),
-    indexes: vec![IndexSpec {
-        name: "idx_trace_id".into(),
-        expression: "trace_id".into(),
-        type_def: "bloom_filter(0.01)".into(),
-        granularity: 1,
-    }],
-    ttl: Some(TtlSpec {
-        column: "started_at".into(),
-        move_to_volume_after: Some(TtlMove { interval: "14 DAY".into(), volume: "cold".into() }),
-        delete_after: Some("180 DAY".into()),
-    }),
-    settings: vec![
-        ("storage_policy".into(), "'hot_cold'".into()),
-        ("index_granularity".into(), "8192".into()),
-    ],
-    // ...
-};
-// TTL toDateTime(started_at) + INTERVAL 14 DAY TO VOLUME 'cold', toDateTime(started_at) + INTERVAL 180 DAY DELETE
-```
-
-A `DateTime64` TTL column is automatically wrapped in `toDateTime(...)`. All four fields are optional/empty by default, so existing specs render exactly as before.
-
-**Safety posture:** these knobs are **app-controlled raw fragments** emitted verbatim — `partition_by`, the index `expression`/`type_def`, the TTL `interval`/`volume`/`delete_after`, and the settings RHS values are _not_ validated, exactly like `engine`. Only identifiers are validated: the index `name`, and the TTL `column` (which must also be a real column in the table). Never build the raw fragments from untrusted input.
-
-## Ingest: flatten + coerce
-
-Shape an arbitrary record to a (possibly dynamic) table — known keys land in their columns, the long tail flattens into `attrs`, and `raw` captures the original:
-
-```rust
-use clickhouse_kit::{coerce_to_table, FlattenOptions};
-
-let result = coerce_to_table(input_json, &table, &FlattenOptions::default());
-// result.row: BTreeMap<String, Value> ready to insert · result.overflow_keys: what went to `attrs`
-```
-
-## Migrations + drift — bring your own client
-
-The I/O layer is written against a tiny `ChExecutor` trait, so the crate never depends on a concrete ClickHouse driver. Implement it over the [`clickhouse`](https://crates.io/crates/clickhouse) crate (or any client):
+No auto-diff engine — schema changes are explicit numbered migrations, tracked in `_ch_migrations`, applied forward-only. TS *generates* the files (`generateClickHouseMigrations` + a journal); both sides *run* them and both gate drift against live `system.columns`. The I/O layer is a tiny trait/interface, so neither package pins your ClickHouse driver:
 
 ```rust
 use clickhouse_kit::{run_migrations, check_drift};
 
-// forward-only, tracked in `_ch_migrations`; already-applied files are skipped
 let applied = run_migrations(&exec, std::path::Path::new("clickhouse/migrations")).await?;
-
-// compare the live schema (system.columns) to your TableSpecs
-let drift = check_drift(&exec, &[table]).await?;
+let drift = check_drift(&exec, &[table]).await?;   // live schema vs. your TableSpecs
 ```
 
-For growing a per-tenant table, `diff_columns` + `alter_add_columns_sql` emit a guarded, **additive-only** `ALTER TABLE … ADD COLUMN IF NOT EXISTS …` (identifiers quoted; types from your trusted spec, never from the live DB).
+### 🌉 TS→Rust bridge (Rust)
 
-## TS→Rust bridge: generate Rust rows from a TS-authored table
-
-When the schema lives in TypeScript, you don't hand-write (and re-sync) the Rust row struct — introspect the live table and generate it:
+When TypeScript owns a table's schema, the Rust side never hand-copies the row struct — it introspects the live table and generates it, with `check_drift` in CI asserting the generated view stays ≡ the live schema:
 
 ```rust
 use clickhouse_kit::introspect_row_struct;
 
-// Reads system.columns for `events` and emits the Rust source:
 let src = introspect_row_struct(&exec, "events", "EventRow").await?;
-// #[derive(Debug, Clone, clickhouse::Row, serde::Serialize, serde::Deserialize)]
-// pub struct EventRow {
-//     pub id: String,                                       // UUID
-//     pub org: String,                                      // LowCardinality(String)
-//     pub n: u64,
-//     pub tags: Vec<String>,
-//     pub attrs: std::collections::HashMap<String, String>,
-// }
+// → #[derive(Debug, Clone, clickhouse::Row, serde::Serialize, serde::Deserialize)]
+//   pub struct EventRow { pub id: String, /* UUID */ pub org: String, /* LowCardinality(String) */ … }
 ```
 
-`ch_type_to_rust` / `rust_row_struct` are also exposed directly. Pair this with `check_drift` in CI to assert the generated Rust view stays ≡ the live (TS-owned) schema — so the Rust side can never silently diverge.
+Codegen runs the other direction too: `emit_row_interface` / `emit_select_schema` / `emit_insert_schema` / `emit_ts_module` turn a Rust `TableSpec` into a TS interface + Zod schemas.
 
-## Design
+---
 
-- **Safe by construction.** The type allowlist is unrepresentable-by-default; identifiers are validated + quoted; tables are bounded. The dangerous bits are impossible, not discouraged.
-- **Rows are Serde-native.** Use `#[derive(clickhouse::Row, Deserialize)]` for reads — the kit doesn't reinvent row mapping.
-- **Forward-only.** No auto-diff engine; schema changes are explicit migrations. The additive `ALTER` path for dynamic per-tenant tables is separate and bounded.
-- **Tested against real ClickHouse.** The migration runner, drift gate, and DDL round-trip are verified via [testcontainers](https://crates.io/crates/testcontainers) in CI, not just string assertions.
+## Quickstart
 
-## License
+Both packages are published — these install lines were verified against the live registries:
 
-MIT © [SmooAI](https://smooai.com)
+**TypeScript** (npm, currently `0.2.0`):
+
+```bash
+pnpm add @smooai/clickhouse-kit zod   # zod ^4 is a peer dependency
+```
+
+**Rust** (crates.io, currently `0.3.0` — the crate is `smooai-clickhouse-kit`, it imports as `clickhouse_kit`):
+
+```toml
+[dependencies]
+smooai-clickhouse-kit = "0.3"
+```
+
+```rust
+use clickhouse_kit::{to_create_table_sql, TableSpec};
+```
+
+Full Rust walkthrough (every runtime primitive, with the safety posture spelled out): [`crates/clickhouse-kit/README.md`](crates/clickhouse-kit/README.md). The v0.2 reframe and the source-of-truth model: [`ROADMAP.md`](ROADMAP.md).
+
+## Design invariants
+
+- **Safe by construction.** Every runtime/user-facing primitive validates input; the happy path makes SQL injection and unbounded tables impossible, not discouraged.
+- **Forward-only.** No auto-diff engine for code-defined tables; the additive `ALTER` path for dynamic per-tenant tables is a separate, explicitly-bounded path.
+- **Rows are Serde-native / Zod-native.** Reads use `#[derive(clickhouse::Row)]` in Rust and Zod schemas in TS — the kit doesn't reinvent row mapping.
+- **Bring your own client.** `ChExecutor` (Rust) / `ClickHouseClient` (TS) are minimal interfaces; the kit never pins a driver.
+- **Tested against real ClickHouse.** The Rust migration runner, drift gate, DDL round-trip, and introspection→codegen path run against real ClickHouse via testcontainers in CI.
+
+## CI + publishing
+
+- **TypeScript** — `pr-checks.yml` on every PR: typecheck → lint → format check → test → build. Publishing via changesets (`release.yml`).
+- **Rust** — `rust.yml` on PRs + main: `cargo fmt --check` → `clippy --all-targets -D warnings` → unit tests → testcontainers integration against real ClickHouse. Crate publishing is a manual `publish-crate.yml` dispatch after a version bump.
+
+## 🧩 Part of Smoo AI
+
+clickhouse-kit is built and open-sourced by **[Smoo AI](https://smoo.ai)** — the AI-powered business platform with AI built into every product: CRM, customer support, campaigns, field service, observability, and developer tools.
+
+- 🧰 **More open source from Smoo AI** — [smoo.ai/open-source](https://smoo.ai/open-source)
+- 🧩 **Sibling packages** — [@smooai/logger](https://github.com/SmooAI/logger), [@smooai/utils](https://github.com/SmooAI/utils), [@smooai/fetch](https://github.com/SmooAI/fetch), [smooth](https://github.com/SmooAI/smooth) (the `th` CLI)
+
+## 🤝 Contributing
+
+PRs welcome. TS changes need `pnpm check-all` green and a changeset; Rust changes need `cargo fmt`, clippy-clean `--all-targets`, and tests (the integration suite needs Docker for testcontainers). Keep the invariants above — especially safe-by-construction on anything reachable from untrusted input.
+
+## 📄 License
+
+MIT © [SmooAI](https://smoo.ai). See [LICENSE](./LICENSE).
+
+---
+
+<p align="center">
+  Built by <a href="https://smoo.ai"><strong>Smoo AI</strong></a> — AI built into every product.
+</p>

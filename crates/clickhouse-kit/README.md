@@ -16,10 +16,12 @@ Either way, rows stay [Serde](https://serde.rs)-native (use the [`clickhouse`](h
 
 ```toml
 [dependencies]
-smooai-clickhouse-kit = "0.1"
+smooai-clickhouse-kit = "0.3"
 ```
 
 > The crate is `smooai-clickhouse-kit`; it imports as **`clickhouse_kit`** — `use clickhouse_kit::...`.
+>
+> The TypeScript half of the split — schema-as-code authoring for static, developer-owned tables — is the separate [`@smooai/clickhouse-kit`](https://www.npmjs.com/package/@smooai/clickhouse-kit) npm package in this repo. See the [root README](../../README.md) for which language owns what.
 
 ## Turn untrusted input into safe DDL
 
@@ -42,6 +44,10 @@ let table = TableSpec {
     ],
     engine: "MergeTree()".into(),
     order_by: vec!["id".into()],
+    partition_by: None,
+    ttl: None,
+    indexes: vec![],
+    settings: vec![],
 };
 
 let ddl = to_create_table_sql(&table, &SchemaLimits::default())?;
