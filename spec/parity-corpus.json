@@ -1,0 +1,215 @@
+{
+  "$comment": [
+    "Cross-language parity corpus. Loaded by BOTH test suites — src/__tests__/parity.test.ts",
+    "and crates/clickhouse-kit/tests/parity.rs — so the TypeScript and Rust ports of the same",
+    "behaviour are checked against one committed set of expectations rather than two",
+    "hand-mirrored ones.",
+    "",
+    "Why it exists: the two flatteners disagreed for months and both suites were green, because",
+    "each asserted its own behaviour. TS reached {'a.b': '{\"c\":1}'} at maxDepth 1; Rust needed",
+    "max_depth 2 for the identical input and output. Nothing compared them, so nothing said so.",
+    "",
+    "Scope: the pure, deterministic surface both languages implement — flatten, the column-type",
+    "allowlist, and identifier validation. The migration runner and drift gate also exist in both,",
+    "but they are I/O against a live ClickHouse; their agreement is covered by the Rust",
+    "testcontainers suites rather than here.",
+    "",
+    "Adding a case here is the point: it must pass in every language or the build is red."
+  ],
+
+  "flatten": {
+    "$comment": [
+      "flattenRecord (TS) / flatten_record (Rust). `options` are always given in full so no case",
+      "depends on a default that could diverge. Key order is not compared — the result is a map —",
+      "but WHICH keys survive a maxKeys truncation is, so both implementations iterate a node's",
+      "keys in sorted order.",
+      "",
+      "maxDepth counts levels of RECURSION, not frames: the root object is always destructured,",
+      "and maxDepth 0 means every one of its values is a leaf."
+    ],
+    "cases": [
+      {
+        "name": "nested objects become dotted keys",
+        "input": { "a": 1, "b": { "c": 2, "d": { "e": "x" } } },
+        "options": { "maxDepth": 8, "maxKeys": 1024, "delimiter": "." },
+        "expected": { "a": "1", "b.c": "2", "b.d.e": "x" }
+      },
+      {
+        "name": "arrays are JSON-stringified, never recursed",
+        "input": { "tags": ["a", "b"], "nested": { "ids": [1, 2] } },
+        "options": { "maxDepth": 8, "maxKeys": 1024, "delimiter": "." },
+        "expected": { "tags": "[\"a\",\"b\"]", "nested.ids": "[1,2]" }
+      },
+      {
+        "name": "strings pass through unquoted; other primitives stringify",
+        "input": { "s": "hello", "n": 42, "b": true, "z": null },
+        "options": { "maxDepth": 8, "maxKeys": 1024, "delimiter": "." },
+        "expected": { "s": "hello", "n": "42", "b": "true", "z": "null" }
+      },
+      {
+        "name": "a string containing the delimiter is not re-split",
+        "input": { "path": "a.b.c" },
+        "options": { "maxDepth": 8, "maxKeys": 1024, "delimiter": "." },
+        "expected": { "path": "a.b.c" }
+      },
+      {
+        "name": "custom delimiter",
+        "input": { "a": { "b": 1 } },
+        "options": { "maxDepth": 8, "maxKeys": 1024, "delimiter": "__" },
+        "expected": { "a__b": "1" }
+      },
+      {
+        "name": "depth cap 1 — recurse once, then stringify the remaining subtree",
+        "input": { "a": { "b": { "c": 1 } } },
+        "options": { "maxDepth": 1, "maxKeys": 1024, "delimiter": "." },
+        "expected": { "a.b": "{\"c\":1}" }
+      },
+      {
+        "name": "depth cap 2 — recurse twice",
+        "input": { "a": { "b": { "c": { "d": 1 } } } },
+        "options": { "maxDepth": 2, "maxKeys": 1024, "delimiter": "." },
+        "expected": { "a.b.c": "{\"d\":1}" }
+      },
+      {
+        "name": "depth cap 0 — the root is still destructured, its values are all leaves",
+        "input": { "a": { "b": 1 }, "c": 2 },
+        "options": { "maxDepth": 0, "maxKeys": 1024, "delimiter": "." },
+        "expected": { "a": "{\"b\":1}", "c": "2" }
+      },
+      {
+        "name": "an empty object at the depth cap stringifies to {}",
+        "input": { "a": {} },
+        "options": { "maxDepth": 0, "maxKeys": 1024, "delimiter": "." },
+        "expected": { "a": "{}" }
+      },
+      {
+        "name": "key cap truncates deterministically — sorted order, never exceeded",
+        "input": { "d": 4, "b": 2, "a": 1, "c": 3 },
+        "options": { "maxDepth": 8, "maxKeys": 2, "delimiter": "." },
+        "expected": { "a": "1", "b": "2" }
+      },
+      {
+        "name": "key cap counts leaves, not source keys",
+        "input": { "a": { "x": 1, "y": 2 }, "b": 3 },
+        "options": { "maxDepth": 8, "maxKeys": 2, "delimiter": "." },
+        "expected": { "a.x": "1", "a.y": "2" }
+      }
+    ]
+  },
+
+  "columnTypes": {
+    "$comment": [
+      "columnFromTypeSpec (TS) / ColumnTypeSpec::to_ch_type (Rust). `chType` is the exact",
+      "ClickHouse type string both must render. `rejected: true` means untrusted input naming it",
+      "must NOT produce a column — TS throws SchemaSafetyError, Rust fails to deserialize,",
+      "because the disallowed types have no representation in the enum. Different mechanism,",
+      "same guarantee, and that is what the corpus pins."
+    ],
+    "cases": [
+      { "name": "String", "spec": "String", "chType": "String" },
+      { "name": "UUID", "spec": "UUID", "chType": "UUID" },
+      { "name": "Bool", "spec": "Bool", "chType": "Bool" },
+      { "name": "Date", "spec": "Date", "chType": "Date" },
+      { "name": "DateTime", "spec": "DateTime", "chType": "DateTime" },
+      {
+        "name": "bare DateTime64 defaults to millisecond precision",
+        "spec": "DateTime64",
+        "chType": "DateTime64(3)"
+      },
+      { "name": "Int8", "spec": "Int8", "chType": "Int8" },
+      { "name": "Int64", "spec": "Int64", "chType": "Int64" },
+      { "name": "UInt64", "spec": "UInt64", "chType": "UInt64" },
+      { "name": "Float64", "spec": "Float64", "chType": "Float64" },
+      { "name": "JSON", "spec": "JSON", "chType": "JSON" },
+      {
+        "name": "Nullable wrapper",
+        "spec": { "nullable": "String" },
+        "chType": "Nullable(String)"
+      },
+      {
+        "name": "LowCardinality wrapper",
+        "spec": { "lowCardinality": "String" },
+        "chType": "LowCardinality(String)"
+      },
+      {
+        "name": "wrappers compose, outermost first",
+        "spec": { "lowCardinality": { "nullable": "String" } },
+        "chType": "LowCardinality(Nullable(String))"
+      },
+      {
+        "name": "Nullable around the DateTime64 default",
+        "spec": { "nullable": "DateTime64" },
+        "chType": "Nullable(DateTime64(3))"
+      },
+      { "name": "Array(String)", "spec": { "array": "String" }, "chType": "Array(String)" },
+      {
+        "name": "Map(String, String) — note the space",
+        "spec": { "map": ["String", "String"] },
+        "chType": "Map(String, String)"
+      },
+
+      { "name": "Decimal is not allowlisted", "spec": "Decimal", "rejected": true },
+      { "name": "FixedString is not allowlisted", "spec": "FixedString(16)", "rejected": true },
+      { "name": "Enum is not allowlisted", "spec": "Enum8('a' = 1)", "rejected": true },
+      {
+        "name": "a raw type expression is not allowlisted",
+        "spec": "String) --",
+        "rejected": true
+      },
+      { "name": "lowercase is not the allowlisted spelling", "spec": "string", "rejected": true },
+      { "name": "Array of a non-String element", "spec": { "array": "Int32" }, "rejected": true },
+      {
+        "name": "Map with a non-String key",
+        "spec": { "map": ["Int32", "String"] },
+        "rejected": true
+      },
+      {
+        "name": "Map with a non-String value",
+        "spec": { "map": ["String", "Int32"] },
+        "rejected": true
+      },
+      { "name": "an unrecognised wrapper", "spec": { "tuple": "String" }, "rejected": true },
+      {
+        "name": "a disallowed type inside a wrapper",
+        "spec": { "nullable": "Decimal" },
+        "rejected": true
+      }
+    ]
+  },
+
+  "identifiers": {
+    "$comment": [
+      "validateIdentifier (TS) / validate_identifier (Rust). One strict ASCII allowlist:",
+      "^[A-Za-z_][A-Za-z0-9_]*$ within the length bound. This is the gate that makes an",
+      "untrusted column name unable to inject SQL, so both languages must reject identically —",
+      "a name one side accepts and the other rejects is a portability bug at a security boundary.",
+      "`maxIdentifierLength` is the default (128)."
+    ],
+    "cases": [
+      { "value": "org_id", "valid": true },
+      { "value": "_leading_underscore", "valid": true },
+      { "value": "Mixed_Case_9", "valid": true },
+      { "value": "a", "valid": true },
+
+      { "value": "", "valid": false, "why": "empty" },
+      { "value": "9leading_digit", "valid": false, "why": "must not start with a digit" },
+      { "value": "has space", "valid": false, "why": "space" },
+      { "value": "has-hyphen", "valid": false, "why": "hyphen" },
+      { "value": "has.dot", "valid": false, "why": "dot — would address another table" },
+      { "value": "has`backtick", "valid": false, "why": "backtick — quoting escape" },
+      { "value": "has\"quote", "valid": false, "why": "double quote" },
+      { "value": "has'quote", "valid": false, "why": "single quote" },
+      { "value": "drop; DROP TABLE t", "valid": false, "why": "statement separator" },
+      { "value": "a--comment", "valid": false, "why": "SQL comment" },
+      { "value": "café", "valid": false, "why": "non-ASCII" },
+      { "value": "emoji_🙂", "valid": false, "why": "non-ASCII" },
+      { "value": "tab\there", "valid": false, "why": "control character" },
+      { "value": "nul\u0000byte", "valid": false, "why": "NUL" },
+      {
+        "value": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "valid": false,
+        "why": "129 characters — one over the 128 bound"
+      }
+    ]
+  }
+}

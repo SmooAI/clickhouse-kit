@@ -17,8 +17,11 @@ use std::collections::{BTreeMap, HashSet};
 /// producing an unbounded key explosion.
 #[derive(Debug, Clone)]
 pub struct FlattenOptions {
-    /// Maximum object nesting to descend into; deeper objects are kept whole as
-    /// a JSON-stringified leaf rather than recursed.
+    /// Levels of recursion BELOW the root. The root object is always destructured,
+    /// so `max_depth: 0` makes every one of its values a leaf and `max_depth: 1`
+    /// descends one level; deeper objects are kept whole as a JSON-stringified leaf
+    /// rather than recursed. Matches the TypeScript `flattenRecord`'s `maxDepth`,
+    /// which `spec/parity-corpus.json` pins.
     pub max_depth: usize,
     /// Hard ceiling on the number of flattened keys produced.
     pub max_keys: usize,
@@ -58,8 +61,22 @@ fn flatten_into(
     }
     match value {
         // Descend into objects until the depth cap; arrays are never recursed.
-        Value::Object(map) if depth < opts.max_depth => {
-            for (k, v) in map {
+        //
+        // `<=`, not `<`: `depth` is the nesting level of `value` itself, and the ROOT
+        // (depth 0) is always destructured, so `max_depth` counts levels of recursion
+        // below the root. `<` counted the root as one of them, which made Rust stop a
+        // level earlier than the TypeScript port for the same `max_depth` — both
+        // suites green, because each asserted its own answer. Pinned now by
+        // spec/parity-corpus.json, which both languages load.
+        Value::Object(map) if depth <= opts.max_depth => {
+            // Sorted, not the map's own order: which keys survive a `max_keys`
+            // truncation must not depend on iteration order. `serde_json::Map` is a
+            // BTreeMap by default but becomes insertion-ordered if anything in the
+            // dependency graph turns on its `preserve_order` feature, and feature
+            // unification means that is not this crate's decision to make.
+            let mut entries: Vec<_> = map.iter().collect();
+            entries.sort_by_key(|(k, _)| k.as_str());
+            for (k, v) in entries {
                 if out.len() >= opts.max_keys {
                     break;
                 }
@@ -84,9 +101,13 @@ fn flatten_into(
 /// Flatten a JSON document into a bounded `dotted.key -> string` map.
 ///
 /// Nested objects become dotted keys; arrays are JSON-stringified (not recursed);
-/// primitives are stringified. Recursion stops at `max_depth` (deeper objects are
-/// kept whole as a JSON string) and the result never exceeds `max_keys` entries.
-/// Pure — no allocation beyond the returned map.
+/// primitives are stringified. Recursion stops `max_depth` levels below the root
+/// (deeper objects are kept whole as a JSON string) and the result never exceeds
+/// `max_keys` entries — with a node's keys visited in sorted order, so which keys
+/// survive a truncation is deterministic and matches the TypeScript port.
+///
+/// Cross-language behaviour is pinned by `spec/parity-corpus.json`, which both this
+/// crate's `tests/parity.rs` and the TS `src/__tests__/parity.test.ts` load.
 pub fn flatten_record(value: &Value, opts: &FlattenOptions) -> BTreeMap<String, String> {
     let mut out = BTreeMap::new();
     flatten_into("", value, 0, opts, &mut out);
@@ -226,7 +247,10 @@ mod tests {
     fn enforces_depth_cap() {
         let v = json!({ "a": { "b": { "c": 1 } } });
         let opts = FlattenOptions {
-            max_depth: 2,
+            // One level of recursion below the root. This asserted `max_depth: 2`
+            // for the same result until spec/parity-corpus.json showed the TS port
+            // reaching it at 1 — the root was being counted as a level of descent.
+            max_depth: 1,
             ..FlattenOptions::default()
         };
         let flat = flatten_record(&v, &opts);

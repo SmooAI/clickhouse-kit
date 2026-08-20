@@ -12,7 +12,12 @@ import type { ChTable } from "./kit";
 // ── flattenRecord ────────────────────────────────────────────────────────────
 
 export interface FlattenOptions {
-  /** Max nesting depth to recurse before stringifying the remaining subtree. */
+  /**
+   * Levels of recursion BELOW the root. The root object is always destructured,
+   * so `maxDepth: 0` makes every one of its values a leaf and `maxDepth: 1`
+   * descends one level before stringifying the remaining subtree. The Rust
+   * `flatten_record` counts identically — pinned by `spec/parity-corpus.json`.
+   */
   maxDepth?: number;
   /** Hard cap on emitted keys — flattening stops once reached (never exceeded). */
   maxKeys?: number;
@@ -39,6 +44,11 @@ function stringifyLeaf(value: unknown): string {
  * than recursed; primitives are stringified. Depth and key caps are enforced by
  * stopping (objects past `maxDepth` are JSON-stringified whole; keys past
  * `maxKeys` are skipped) — never by throwing, and never exceeding `maxKeys`.
+ * A node's keys are visited in sorted order, so WHICH keys survive a `maxKeys`
+ * truncation is deterministic rather than a function of insertion order.
+ *
+ * Cross-language behaviour is pinned by `spec/parity-corpus.json`, which both
+ * this suite and the Rust crate's `tests/parity.rs` load.
  */
 export function flattenRecord(
   obj: Record<string, unknown>,
@@ -50,7 +60,12 @@ export function flattenRecord(
   const out: Record<string, string> = {};
 
   const visit = (node: Record<string, unknown>, prefix: string, depth: number): void => {
-    for (const [key, value] of Object.entries(node)) {
+    // Sorted, not insertion order: which keys survive a `maxKeys` truncation must
+    // not depend on the order they happened to arrive in — and must match the Rust
+    // port, whose `serde_json::Map` is sorted. Pinned by spec/parity-corpus.json.
+    for (const [key, value] of Object.entries(node).sort(([a], [b]) =>
+      a < b ? -1 : a > b ? 1 : 0,
+    )) {
       if (Object.keys(out).length >= maxKeys) return;
       if (value === undefined) continue;
       const path = prefix ? `${prefix}${delimiter}${key}` : key;
