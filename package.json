@@ -1,6 +1,6 @@
 {
   "name": "@smooai/clickhouse-kit",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "TS-only schema-as-code toolkit for ClickHouse — declarative schemas, Zod schema emitters, forward-only migrations, and drift detection.",
   "keywords": [
     "clickhouse",
@@ -41,13 +41,15 @@
   },
   "scripts": {
     "build": "tsup",
-    "check-all": "pnpm run typecheck && pnpm run lint && pnpm run test && pnpm run build",
+    "check-all": "pnpm run typecheck && pnpm run lint && pnpm run test && pnpm run version:check && pnpm run build",
     "ci:publish": "pnpm build && pnpm changeset publish",
     "format": "oxfmt --write .",
     "format:check": "oxfmt --check .",
     "lint": "oxlint src",
     "test": "vitest run",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "version": "changeset version && node scripts/sync-versions.mjs",
+    "version:check": "node scripts/sync-versions.mjs --check"
   },
   "devDependencies": {
     "@changesets/cli": "^2.28.1",
