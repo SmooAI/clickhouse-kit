@@ -48,7 +48,7 @@
     "lint": "oxlint src",
     "test": "vitest run",
     "typecheck": "tsc --noEmit",
-    "version": "changeset version && node scripts/sync-versions.mjs",
+    "version": "changeset version && node scripts/sync-versions.mjs && pnpm format",
     "version:check": "node scripts/sync-versions.mjs --check"
   },
   "devDependencies": {
