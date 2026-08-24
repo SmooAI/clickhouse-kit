@@ -8,4 +8,4 @@
 #   rust  -> rust-toolchain.toml + dtolnay/rust-toolchain. rustup is canonical
 #            and mise defers to it anyway.
 [tools]
-node = "24.14.0"   # ships npm 11.9.0 — required (>=11.5.1) for npm OIDC trusted publishing
+node = "24.14.0" # ships npm 11.9.0 — required (>=11.5.1) for npm OIDC trusted publishing
